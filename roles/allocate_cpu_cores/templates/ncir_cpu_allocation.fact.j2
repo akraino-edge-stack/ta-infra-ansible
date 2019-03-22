@@ -1,0 +1,9 @@
+{# Copyright (C) 2018 Nokia #}
+{
+{% for s in ncir_cpu_sets %}
+    "{{ s }}": {
+        "set" : {{ ncir_cpu_sets[s] | sort }},
+        "list": "{{ ncir_cpu_sets[s] | set_to_cpulist }}"
+    }{{ "," if not loop.last else "" }}
+{% endfor %}
+}

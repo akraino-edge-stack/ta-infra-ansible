@@ -1,0 +1,33 @@
+# {{ ansible_managed }}
+frontend restful-front-1
+    bind {{ external_lb_vip_address }}:61200 ssl crt {{ haproxy_ssl_pem }}
+    option httplog
+    option forwardfor except 127.0.0.0/8
+    option http-server-close
+    reqadd X-Forwarded-Proto:\ https
+    rspadd X-Frame-Options:\ SAMEORIGIN
+    rspadd Strict-Transport-Security:\ max-age=15768000
+    mode http
+    default_backend restful-back
+
+frontend restful-front-2
+    bind {{ internal_lb_vip_address }}:61200
+    option httplog
+    option forwardfor except 127.0.0.0/8
+    option http-server-close
+    rspadd X-Frame-Options:\ SAMEORIGIN
+    rspadd Strict-Transport-Security:\ max-age=15768000
+    mode http
+    default_backend restful-back
+
+
+backend restful-back
+    mode http
+    balance leastconn
+    stick store-request src
+    stick-table type ip size 256k expire 30m
+    option forwardfor
+    option httplog
+{% for con in groups['management'] %}
+    server {{ con }} {{ hostvars[con]['networking']['infra_internal']['ip'] }}:61200 check port 61200 inter 12000 rise 3 fall 3
+{% endfor %}

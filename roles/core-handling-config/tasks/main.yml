@@ -1,0 +1,55 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Create coredump directory to log volume
+  file: path=/var/log/coredump state=directory
+
+- name: Remote old coredump directory
+  file: path=/var/lib/systemd/coredump state=absent 
+
+- name: Create link so that coredumps go to log volume
+  file:
+    src: '/var/log/coredump'
+    dest: '/var/lib/systemd/coredump'
+    state: link
+
+- name: Create coredump configuration directory
+  file: path=/etc/systemd/coredump.conf.d state=directory
+
+- name: Enable core files
+  copy:
+    src: "01-enable-cores.conf"
+    dest: "/etc/systemd/coredump.conf.d/01-enable-cores.conf"
+    owner: "root"
+    group: "root"
+  tags:
+    - core-handling-config
+
+- name: Enable only backtraces
+  copy:
+    src: "02-only-backtrace.conf"
+    dest: "/etc/systemd/coredump.conf.d/02-only-backtrace.conf"
+    owner: "root"
+    group: "root"
+  tags:
+    - core-handling-config
+
+- name: Enable core dumping
+  sysctl:
+    name: kernel.core_pattern 
+    value: '|/usr/lib/systemd/systemd-coredump %P %u %g %s %t %c %e'
+    sysctl_file: /etc/sysctl.d/50-coredump.conf
+

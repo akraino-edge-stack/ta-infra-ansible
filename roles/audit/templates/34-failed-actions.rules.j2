@@ -1,0 +1,5 @@
+## failed actions
+-a always,exit -F arch=b64 -S all -F exit=-EPERM -F key=access_denied
+-a always,exit -F arch=b64 -S all -F exit=-EACCES -F key=access_denied
+-a always,exit -F arch=b32 -S all -F exit=-EPERM -F key=access_denied
+-a always,exit -F arch=b32 -S all -F exit=-EACCES -F key=access_denied

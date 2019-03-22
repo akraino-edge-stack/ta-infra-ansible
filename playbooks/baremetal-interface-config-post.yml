@@ -1,0 +1,106 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# cmframework.requires: performance_nodes_post.yaml,provisioning_done.yml
+
+- name: Interface configuration postconfig
+  hosts: baremetal-nodes:!localhost
+  gather_facts: "{{ gather_facts | default(True) }}"
+  tasks:
+  - name: Run os-net-config command
+    command: "os-net-config --detailed-exit-codes -v -c /etc/os-net-config/config.json"
+    register: os_net_config_result
+    failed_when: not (os_net_config_result.rc == 0 or os_net_config_result.rc == 2)
+    changed_when: os_net_config_result.rc == 2
+
+  - debug: var=os_net_config_result.stderr_lines
+    when: os_net_config_result.rc == 2
+
+  - name: Get os-net-config
+    slurp:
+      src: /etc/os-net-config/config.json
+    register: os_net_config_b64
+
+  - name: Set os_net_config
+    set_fact:
+      os_net_config: "{{ os_net_config_b64['content'] | b64decode | from_json }}"
+
+  - name: Get interface names
+    set_fact:
+      phy_ifaces: "{{ os_net_config | json_query('network_config[*].name') }}"
+
+  - name: Make sure bridges are up
+    command: "ifup {{item}}"
+    with_items: "{{phy_ifaces}}"
+    ignore_errors: "yes"
+
+  - name: Updating the facts due to net changes
+    setup:
+
+  - name: Check if SR-IOV is configured
+    stat:
+      path: /etc/sriov/sriov.conf
+    register: sriov_result
+
+  - name: Enable sriov.service
+    systemd:
+      name: sriov
+      daemon_reload: "yes"
+      enabled: "yes"
+    when: sriov_result.stat.exists == True
+
+  - name: Start sriov.service
+    systemd:
+      name: sriov
+      state: started
+    when: sriov_result.stat.exists == True and hostname != installation_controller
+
+  - name: Check if OVS offload SR-IOV is configured
+    shell: grep "SRIOV_INTERFACES_OFFLOADED" /etc/sriov/sriov.conf | cut -d = -f2 | sed -e 's/^"//' -e 's/"$//'
+    register: offload_result
+    when: sriov_result.stat.exists == True
+
+  - name: Enable ovsoffloadsriov.service
+    systemd:
+      name: ovsoffloadsriov
+      daemon_reload: "yes"
+      enabled: "yes"
+    when:
+      - sriov_result.stat.exists == True
+      - offload_result.stdout != ""
+
+  - name: Start offload.service
+    systemd:
+      name: ovsoffloadsriov
+      state: started
+    when:
+      - sriov_result.stat.exists == True
+      - offload_result.stdout != "" and hostname != installation_controller
+
+- name: Restart nova compute if sr-iov configured except on CAAS nodes
+  hosts: base:!vnf-nodes
+  gather_facts: "{{ gather_facts | default(True) }}"
+  tasks:
+  - name: Check if nova-compute service is enabled here
+    shell: "systemctl list-unit-files | grep enabled | grep -w nova-compute | wc -l"
+    register: novacomputeresult
+
+  - name: Restart nova compute
+    systemd:
+      name: nova-compute
+      state: restarted
+    when: sriov_result.stat.exists == True and hostname != installation_controller and novacomputeresult.stdout|int > 0
+

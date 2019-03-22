@@ -1,0 +1,161 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+- name: Get configuration.
+  set_fact:
+    perf_profile: "{{ performance_profiles[hosts[hostname]['performance_profiles'][0]] if 'performance_profiles' in hosts[hostname] else {} }}"
+    cpu_alloc: "{{ ansible_local.ncir_cpu_allocation | default([]) }}"
+- debug:
+    var: perf_profile
+- debug:
+    var: cpu_alloc
+
+- name: Make combined CPU lists.
+  set_fact:
+    cpu_alloc: "{{ cpu_alloc | cpulist_combine(item['name'], item['lists']) }}"
+  with_items:
+    - { 'name': 'app', 'lists': ['ovs_dpdk', 'vm'] }
+
+- name: Make sure configuration directory exists.
+  file:
+    path: /etc/systemd/system.conf.d
+    state: directory
+    mode: 0755
+
+- name: Set platform CPU affinity.
+  ini_file:
+    dest: /etc/systemd/system.conf.d/00affinity.conf
+    mode: 0644
+    section: Manager
+    option: CPUAffinity
+    value: "{{ cpu_alloc['platform']['set'] | join(' ') }}"
+    no_extra_spaces: True
+  register: platform_affinity
+  when: cpu_alloc | length > 0
+
+- name: Make CPU list parameters.
+  set_fact:
+    kcmdline_default_list: "{{ kcmdline_default_list + [ item['opt'] + '=' + cpu_alloc[item['list']]['list'] ] }}"
+  with_items:
+    - { 'opt': 'irqaffinity', 'list': 'platform' }
+    - { 'opt': 'kthread', 'list': 'platform' }
+    - { 'opt': 'nohz_full',   'list': 'app' }
+    - { 'opt': 'rcu_nocbs',   'list': 'app' }
+    - { 'opt': 'isolcpus',    'list': 'ovs_dpdk' }
+  when: "item['list'] in cpu_alloc"
+
+- name: Make hugepage parameters.
+  set_fact:
+    kcmdline_default_list: "{{ kcmdline_default_list + [ item + '=' + perf_profile[item] | string ] }}"
+  with_items: ['default_hugepagesz', 'hugepagesz', 'hugepages']
+  when: item in perf_profile
+
+- debug:
+    var: kcmdline_list
+
+- name: Set common kernel parameters.
+  lineinfile:
+    name: /etc/default/grub
+    regexp: "^GRUB_CMDLINE_LINUX="
+    line: "GRUB_CMDLINE_LINUX='{{ kcmdline_list | list_to_cmdline }}'"
+  register: grub_cmdline
+
+- debug:
+    var: kcmdline_default_list
+
+- name: Set default kernel parameters.
+  lineinfile:
+    name: /etc/default/grub
+    regexp: "^GRUB_CMDLINE_LINUX_DEFAULT="
+    line: "GRUB_CMDLINE_LINUX_DEFAULT='{{ kcmdline_default_list | list_to_cmdline }}'"
+  register: grub_cmdline_default
+
+- name: Generate grub configurations
+  command: grub2-mkconfig -o /boot/grub2/grub.cfg
+  when: grub_cmdline.changed or grub_cmdline_default.changed
+
+- name: Ensure network.service is enabled
+  systemd:
+    name: network
+    enabled: yes
+
+- name: Reboot node
+  shell: ( sleep 3 && /sbin/reboot & )
+  async: 0
+  poll: 0
+  ignore_errors: yes
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
+    - hostname != installation_controller
+    - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
+
+- name: Wait for the server to reboot
+  local_action: wait_for host="{{ansible_host}}" delay=15 state=started port=22 connect_timeout=10 timeout=720
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
+    - hostname != installation_controller
+    - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
+
+- name: Wait for remote node ssh login. Wating for 10mins max.
+  become: "{{ ansible_env.SUDO_USER }}"
+  local_action: shell ssh -oBatchMode=yes -4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ ansible_host }} "echo success"
+  register: user_enabled
+  until: user_enabled.stdout.find("success") != -1
+  retries: 90
+  delay: 10
+  no_log: True
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
+    - hostname != installation_controller
+    - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
+
+- name: Ensure directory for flag file
+  file:
+    path: /etc/ansible-change_kernel_cmdline/
+    mode: 0555
+    state: directory
+
+- name: Create a temporary flag file to indicate enabling of performance profile
+  copy:
+    content: ""
+    dest: /etc/ansible-change_kernel_cmdline/enabled
+    force: "no"
+    group: root
+    owner: root
+    mode: 0555
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
+    - hostname == installation_controller
+
+- name: Ensure finalize-bootstrap.service is enabled on the installation host
+  systemd:
+    name: finalize-bootstrap
+    enabled: "yes"
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
+    - hostname == installation_controller
+
+- name: Set OS tunables in /etc/sysctl.d/os-tuning.conf
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: "{{ os_tuning_conf_file }}"
+    ignoreerrors: no
+  with_items:
+    - {name: 'vm.max_map_count', value: '300000'}
+    - {name: 'fs.inotify.max_user_instances', value: '1024'}

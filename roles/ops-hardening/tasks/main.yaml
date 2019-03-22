@@ -1,0 +1,348 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#
+# Linux password hardening
+#
+
+- name: "Set Password Strength Minimum Digit Characters."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*dcredit'
+    line: 'dcredit = -1'
+
+- name: "Set Password Minimum Length."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*minlen'
+    line: 'minlen = 8'
+
+- name: "Set Password Strength Minimum Uppercase Characters."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*ucredit'
+    line: 'ucredit = -1'
+
+- name: "Set Password Strength Minimum Special Characters."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*ocredit'
+    line: 'ocredit = -1'
+
+- name: "Set Password Strength Minimum Lowercase Characters."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*lcredit'
+    line: 'lcredit = -1'
+
+- name: "Set Password Strength Minimum Different Categories."
+  lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^[#\s]*minclass'
+    line: 'minclass = 3'
+
+- name: "Set Password Minimum Length in login.defs"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_LEN[\s]*[0-9]*$'
+    line: 'PASS_MIN_LEN   8'
+
+- name: "Set Password Minimum Age"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS[\s]*[0-9]*$'
+    line: 'PASS_MIN_DAYS   0'
+
+#
+# YUM config
+#
+
+- name: "Ensure YUM Removes Previous Package Versions"
+  lineinfile:
+    path: /etc/yum.conf
+    insertafter: '^[#\s]*\[main\]'
+    line: 'clean_requirements_on_remove = 1'
+
+- name: "Ensure gpgcheck Enabled for Local Packages"
+  lineinfile:
+    path: /etc/yum.conf
+    insertafter: '^[#\s]*\[main\]'
+    line: 'localpkg_gpgcheck = 1'
+
+#
+# Setting Ctrl-Alt-Del action
+#
+
+- name: "Disable Ctrl-Alt-Del Burst Action"
+  lineinfile:
+    path: /etc/systemd/system.conf
+    insertafter: '^[#\s]*CtrlAltDelBurstAction'
+    line: 'CtrlAltDelBurstAction=none'
+
+- name: "Disable Ctrl-Alt-Del Reboot Activation"
+  command: systemctl mask ctrl-alt-del.target
+
+#
+# Configure kernel modules
+#
+
+- name: "kernel module setting"
+  lineinfile:
+    create=yes
+    dest="/etc/modprobe.d/{{item}}.conf"
+    regexp="{{item}}"
+    line="install {{item}} /bin/true"
+  with_items:
+    - bluetooth
+    - dccp
+    - squashfs
+    - hfsplus
+    - hfs
+    - jffs2
+    - freevxfs
+    - cramfs
+    - usb-storage
+    - udf
+
+#
+# Disable interactive boot
+#
+
+- name:  Verify that Interactive Boot is Disabled GRUB_CMDLINE_LINUX Setting
+  lineinfile:
+    path: /etc/default/grub
+    backrefs: yes
+    regexp: '^GRUB_CMDLINE_LINUX=(.*)systemd\.confirm_spawn=(1|yes|true|on)\s*(.*)$'
+    line: 'GRUB_CMDLINE_LINUX=\1\3'
+
+- name:  Verify that Interactive Boot is Disabled GRUB_CMDLINE_LINUX_DEFAULT Setting
+  lineinfile:
+    path: /etc/default/grub
+    backrefs: yes
+    regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=(.*)systemd\.confirm_spawn=(1|yes|true|on)\s*(.*)$'
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT=\1\3'
+
+#
+# Set file permissions
+#
+
+- name: "Set set the 600 file permissions"
+  file:
+    path: "{{item}}"
+    state: touch
+    mode: 600
+  with_items:
+    - /boot/grub2/grub.cfg
+    - /var/log/boot.log
+    - /var/log/cron
+
+#
+# Disable direct root login
+#
+
+- name: "Direct root Logins Not Allowed"
+  shell: echo > /etc/securetty
+
+#
+# Configure IPv6
+#
+
+- name: Disable ipv6 support if the ipv6 is not needed
+  when: ansible_default_ipv6|length == 0
+  sysctl:
+    name: net.ipv6.conf.all.disable_ipv6
+    value: 1
+    state: present
+    reload: yes
+
+- name: Disable Support for udp6
+  when: ansible_default_ipv6|length == 0
+  lineinfile:
+    path: /etc/netconfig
+    state: absent
+    regexp: '^udp6.*'
+
+- name: Disable Support for tcp6
+  when: ansible_default_ipv6|length == 0
+  lineinfile:
+    path: /etc/netconfig
+    state: absent
+    regexp: '^tcp6.*'
+
+- name: Disable automatic ipv6 configuration
+  when: ansible_default_ipv6|length > 0
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    - { name: 'net.ipv6.conf.all.accept_source_route', value: 0 }
+    - { name: 'net.ipv6.conf.all.accept_ra', value: 0 }
+    - { name: 'net.ipv6.conf.default.accept_ra', value: 0 }
+    - { name: 'net.ipv6.conf.all.accept_redirects', value: 0 }
+    - { name: 'net.ipv6.conf.default.accept_redirects', value: 0 }
+    - { name: 'net.ipv6.conf.default.accept_source_route', value: 0 }
+    - { name: 'net.ipv6.conf.all.forwarding', value: 0 }
+
+#
+# Configure kernel parameters
+#
+
+- name: Configure the kernel parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    - { name: 'net.ipv4.conf.default.send_redirects', value: 0 }
+    - { name: 'net.ipv4.conf.all.send_redirects', value: 0 }
+    - { name: 'net.ipv4.ip_forward', value: 0 }
+    - { name: 'net.ipv4.conf.all.accept_redirects', value: 0 }
+    - { name: 'net.ipv4.conf.all.secure_redirects', value: 0 }
+    - { name: 'net.ipv4.conf.all.log_martians', value: 1 }
+    - { name: 'net.ipv4.conf.default.log_martians', value: 1 }
+    - { name: 'net.ipv4.conf.default.accept_redirects', value: 0 }
+    - { name: 'net.ipv4.conf.default.secure_redirects', value: 0 }
+    - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: 1 }
+    - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: 1 }
+    - { name: 'net.ipv4.tcp_syncookies', value: 1 }
+    - { name: 'fs.suid_dumpable', value: 0 }
+    - { name: 'kernel.dmesg_restrict', value: 1 }
+    - { name: 'kernel.core_uses_pid', value: 1 }
+    - { name: 'kernel.randomize_va_space', value: 2 }
+    - { name: 'kernel.core_pattern', value: '/var/core/core'}
+
+#
+# Configure core dump
+#
+
+- name: "Disable core dump for all user"
+  lineinfile:
+    path: /etc/security/limits.conf
+    insertbefore: '^[a-z].*'
+    line: '*               hard    core            0'
+
+- name: "Configure systemd not to store core dumps"
+  lineinfile:
+    path: /etc/systemd/coredump.conf
+    insertafter: '^\[Coredump\]'
+    line: 'Storage=none'
+
+#
+# Configure syslog
+#
+- name: "Stop rsyslog Service"
+  shell: systemctl stop rsyslog.service
+
+- name: "Disable rsyslog Service"
+  shell: systemctl disable rsyslog.service
+
+- name: "Ensure the /var/log/boot.log Rotated by logrotate"
+  lineinfile:
+    path: /etc/logrotate.d/syslog
+    insertbefore: 'cron$'
+    line: /var/log/boot.log
+
+- name: "Set the umasks by profile file"
+  lineinfile:
+    path: /etc/profile
+    regexp: '{{ item.old }}'
+    line: '{{ item.new }}'
+  with_items:
+    - { old: 'umask 002', new: umask 027 }
+    - { old: 'umask 022', new: umask 077 }
+
+#
+# Keystone config
+#
+
+- name: Set the max_request_body_size in the keystone.conf
+  lineinfile:
+    path: /etc/keystone/keystone.conf
+    insertafter: 'DEFAULT'
+    line: "# enforced by optional sizelimit middleware (keystone.middleware:RequestBodySizeLimiter)\nmax_request_body_size = 114688\n"
+
+- name: Set the insecure_debug in the keystone.conf
+  lineinfile:
+    path: /etc/keystone/keystone.conf
+    insertafter: 'DEFAULT'
+    line: "# If set to true, then the server will return information in HTTP responses\n# that may allow an unauthenticated or authenticated user to get more\n# information than normal, such as additional details about why authentication\n# failed. This may be useful for debugging but is insecure. (boolean value)\ninsecure_debug = false\n"
+
+#
+#Setting bootloader password
+#
+- name: set host os variable
+  when: host_os is defined
+  set_fact:
+    grub2_pass: "{{  host_os.grub2_password | default('Empty')  }}"
+
+- name: protect grub with root password
+  when: grub2_pass is defined and grub2_pass != 'Empty'
+  blockinfile:
+    dest: /etc/grub.d/40_custom
+    state: present
+    insertafter: 'EOF'
+    content: |
+      # define superusers
+      set superusers="root"
+      #define users
+      password_pbkdf2 root "{{ grub2_pass }}"
+
+- name: generate grub config
+  when: grub2_pass is defined and grub2_pass != 'Empty'
+  command: /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+
+#
+#Setting the noexec option to the /dev/shm mount dir
+#
+
+- name: get back device associated to mountpoint
+  shell: mount | grep ' /dev/shm ' |cut -d ' ' -f 1
+  register: device_name
+  check_mode: no
+
+- name: get back device previous mount option
+  shell: mount | grep ' /dev/shm ' | sed -re 's:.*\((.*)\):\1:'
+  register: device_cur_mountoption
+  check_mode: no
+
+- name: get back device fstype
+  shell: mount | grep ' /dev/shm ' | cut -d ' ' -f 5
+  register: device_fstype
+  check_mode: no
+
+- name: Ensure permission noexec are set on /dev/shm
+  mount:
+    path: "/dev/shm"
+    src: "{{device_name.stdout}}"
+    opts: "{{device_cur_mountoption.stdout}},noexec"
+    state: "mounted"
+    fstype: "{{device_fstype.stdout}}"
+
+#
+# Setting file permissions
+#
+
+#- name: "Remove the other user write permission from the system directorys"
+#  command: find / -xdev \( -perm -0002 -a ! -perm -1000 \) -type d -exec chmod o-w {} \;
+#
+#- name: "Remove the other user write permission from the system files"
+#  command: find / -xdev -perm -0002 -type f -exec chmod o-w {} \;
+#
+#- name: "Modified the unauthorized SUID/SGID system executables"
+#  command: sudo chmod -s $(sudo find / -xdev \( -perm -4000 -o -perm -2000 \) -type f | grep -v sudo)

@@ -1,0 +1,81 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- debug:
+    msg:
+      - "DPDK cores {{ ansible_local.ncir_cpu_allocation['ovs_dpdk']['list'] }}"
+      - "Platform cores {{ ansible_local.ncir_cpu_allocation['platform']['list'] }}"
+      - "Host VPUs  {{ansible_processor_vcpus}}, Processor cores {{ansible_processor_cores}}"
+      - "Threads per core {{ansible_processor_threads_per_core}}, Sockets {{ansible_processor_count}}"
+
+- name: Add vfio.conf to modules-load.d
+  lineinfile:
+    path: /etc/modules-load.d/vfio.conf
+    create: "yes"
+    state: present
+    line: 'vfio-pci'
+
+- name: Modprobe vfio-pci
+  modprobe:
+    name: vfio-pci
+    state: present
+
+- name: Ensure openvswitch.service is started
+  systemd:
+    name: openvswitch
+    state: started
+
+- name: configure DPDK cores
+  script: >
+      configure_ovsdpdk.py --cores {{ansible_processor_vcpus}} --pcore {{ansible_processor_cores}}
+      --tcore {{ansible_processor_threads_per_core}} --sockets {{ansible_processor_count}}
+      --dpdkcores {{ ansible_local.ncir_cpu_allocation['ovs_dpdk']['list'] }}
+  register: result
+  changed_when: result.rc == 0
+  failed_when: result.rc == 2
+
+- debug:
+    msg: "RC: {{ result.rc }}"
+
+- debug:
+    var=result.stdout_lines
+  when: result.rc != 0
+
+- name: Ensure enable-dpdk.service is enabled
+  systemd:
+    name: enable-dpdk
+    enabled: "yes"
+  when: result.rc == 0
+
+- name: Start enable-dpdk.service on other than installation host
+  systemd:
+    name: enable-dpdk
+    state: started
+  when:
+    - result.rc == 0
+    - hostname != installation_controller
+
+- name: restart openvswitch.service
+  systemd:
+    name: openvswitch
+    state: restarted
+  when: result.rc == 0
+
+- name: restart libvirtd.service
+  systemd:
+    name: libvirtd
+    state: restarted
+  when: result.rc == 0

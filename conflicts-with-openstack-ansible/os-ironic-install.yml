@@ -1,0 +1,65 @@
+#cmframework.requires: haproxy-install.yml, rabbitmq-install.yml, os-keystone-install.yml
+---
+# Copyright 2016, Rackspace, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# cmframework.requires: memcached-install.yml,galera-install.yml,rabbitmq-install.yml,rsyslog-install.yml,os-keystone-install.yml,os-glance-install.yml,os-nova-install.yml,os-neutron-install.yml,os-swift-install.yml
+
+- name: Installation and setup of Ironic
+  hosts: baremetal_management_nodes
+  gather_facts: "{{ osa_gather_facts | default(True) }}"
+  pre_tasks:
+    - include: "common-tasks/os-{{ container_tech | default('lxc') }}-container-setup.yml"
+    - include: common-tasks/rabbitmq-vhost-user.yml
+      static: no
+      vars:
+        user: "{{ ironic_rabbitmq_userid }}"
+        password: "{{ ironic_rabbitmq_password }}"
+        vhost: "{{ ironic_rabbitmq_vhost }}"
+        _rabbitmq_host_group: "{{ ironic_rabbitmq_host_group }}"
+      when:
+        - inventory_hostname == groups['ironic_all'][0]
+        - groups[ironic_rabbitmq_host_group] | length > 0
+    - include: common-tasks/mysql-db-user.yml
+      static: no
+      vars:
+        user_name: "{{ ironic_galera_user }}"
+        password: "{{ ironic_container_mysql_password }}"
+        login_host: "{{ ironic_galera_address }}"
+        db_name: "{{ ironic_galera_database }}"
+      when: inventory_hostname == groups['ironic_all'][0]
+    - include: common-tasks/unbound-clients.yml
+      static: no
+      when:
+        - hostvars['localhost']['resolvconf_enabled'] | bool
+  roles:
+    - role: "os_ironic"
+    - role: "openstack_openrc"
+      tags:
+        - openrc
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: ironic_log_rotate
+      rsyslog_client_log_dir: "/var/log/ironic"
+      rsyslog_client_config_name: "99-ironic-rsyslog-client.conf"
+      tags:
+        - rsyslog
+    - role: "system_crontab_coordination"
+      tags:
+        - crontab
+  vars:
+    ironic_galera_user: ironic
+    ironic_galera_database: ironic
+    ironic_galera_address: "{{ galera_address }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - ironic

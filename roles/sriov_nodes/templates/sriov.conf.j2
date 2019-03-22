@@ -1,0 +1,83 @@
+{%- set host_network_profiles_list = hosts[ansible_hostname]['network_profiles'] -%}
+{%- set sriov_ifaces = [] -%}
+{%- set trusted_ifaces = [] -%}
+{%- set vf_counts = [] -%}
+{%- if 'sriov_provider_networks' in network_profiles[host_network_profiles_list[0]] -%}
+    {%- set sriov_provider_networks = network_profiles[host_network_profiles_list[0]]['sriov_provider_networks'] -%}
+    {%- for net,net_info in sriov_provider_networks.iteritems() -%}
+        {%- if 'trusted' in net_info -%}
+            {%- set is_trusted = net_info['trusted'] -%}
+        {%- else -%}
+            {%- set is_trusted = False -%}
+        {%- endif -%}
+        {%- if 'vf_count' in net_info -%}
+            {%- set vf_count = net_info['vf_count'] -%}
+        {%- else -%}
+            {%- set vf_count = 0 -%}
+        {%- endif -%}
+        {%- for iface in net_info['interfaces'] -%}
+            {%- if sriov_ifaces.append(iface) -%}{%- endif -%}
+            {%- if is_trusted -%}
+                {%- if trusted_ifaces.append(iface) -%}{%- endif -%}
+            {%- endif -%}
+            {%- if vf_count > 0 -%}
+                {%- set count_info = iface ~ ':' ~ vf_count -%}
+                {%- if vf_counts.append(count_info) -%}{%- endif -%}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- endfor -%}
+{%- endif -%}
+{%- set offloaded_ifaces = [] -%}
+{%- set trusted_offloaded_ifaces = [] -%}
+{%- set vf_counts_offloaded = [] -%}
+{%- if 'provider_network_interfaces' in network_profiles[host_network_profiles_list[0]] -%}
+    {%- set provider_network_interfaces = network_profiles[host_network_profiles_list[0]]['provider_network_interfaces'] -%}
+    {%- set bonding_interfaces = network_profiles[host_network_profiles_list[0]]['bonding_interfaces'] -%}
+    {%- for net,net_info in provider_network_interfaces.iteritems() -%}
+        {% if net_info['type'] == 'ovs-offload-sriov' -%}
+            {%- if 'trusted' in net_info -%}
+                {%- set is_trusted = net_info['trusted'] -%}
+            {%- else -%}
+                {%- set is_trusted = False -%}
+            {%- endif -%}
+            {%- if 'vf_count' in net_info -%}
+                {%- set vf_count = net_info['vf_count'] -%}
+            {%- else -%}
+                {%- set vf_count = 0 -%}
+            {%- endif -%}
+            {%- if net in bonding_interfaces -%}
+                {%- for iface in bonding_interfaces[net] -%}
+                    {%- if sriov_ifaces.append(iface) -%}{%- endif -%}
+                    {%- if offloaded_ifaces.append(iface) -%}{%- endif -%}
+                    {%- if is_trusted -%}
+{#-                     {%- if trusted_offloaded_ifaces.append(iface) -%}{%- endif -%} -#}
+                        {%- if trusted_ifaces.append(iface) -%}{%- endif -%}
+                    {%- endif -%}
+                    {%- if vf_count > 0 -%}
+                        {%- set count_info = iface ~ ':' ~ vf_count -%}
+{#-                     {%- if vf_counts_offloaded.append(count_info) -%}{%- endif -%} -#}
+                        {%- if vf_counts.append(count_info) -%}{%- endif -%}
+                    {%- endif -%}
+                {%- endfor -%}
+             {%- else -%}
+                {%- if offloaded_ifaces.append(net) -%}{%- endif -%}
+                {%- if sriov_ifaces.append(net) -%}{%- endif -%}
+                {%- if is_trusted -%}
+                    {%- if trusted_offloaded_ifaces.append(net) -%}{%- endif -%}
+                    {%- if trusted_ifaces.append(net) -%}{%- endif -%}
+                {%- endif -%}
+                {%- if vf_count > 0 -%}
+                    {%- set count_info = net ~ ':' ~ vf_count -%}
+                    {%- if vf_counts_offloaded.append(count_info) -%}{%- endif -%}
+                    {%- if vf_counts.append(count_info) -%}{%- endif -%}
+                {%- endif -%}
+             {% endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+{%- endif -%}
+SRIOV_INTERFACES="{{sriov_ifaces | join(' ')}}"
+SRIOV_TRUSTED_INTERFACES="{{trusted_ifaces | join(' ')}}"
+SRIOV_VF_COUNTS="{{vf_counts | join(' ')}}"
+SRIOV_INTERFACES_OFFLOADED="{{offloaded_ifaces | join(' ')}}"
+{#- SRIOV_TRUSTED_INTERFACES_OFFLOADED="{{trusted_offloaded_ifaces | join(' ')}}" -#}
+{#- SRIOV_VF_COUNTS_OFFLOADED="{{vf_counts_offloaded | join(' ')}}" -#}

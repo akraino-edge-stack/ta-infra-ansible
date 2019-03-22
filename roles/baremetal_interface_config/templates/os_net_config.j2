@@ -1,0 +1,511 @@
+{#
+This file is written with conditional check and for loop based indentation.
+It improved code readability. The output json is not pretty. Run cat <output.json> | python -m json.tool
+for pretty printing the same.
+#}
+
+{%- set CLOUD_TENANT = 'cloud_tenant' %}
+{%- set VXLAN_HDR_LEN = 50 %}
+
+{#- initialize some variables -#}
+{%- set host_networking = hostvars[ansible_hostname]['networking'] %}
+{%- if 'mtu' in host_networking %}
+    {%- set default_mtu = host_networking['mtu'] %}
+{%- else %}
+    {%- set default_mtu = 1500 %}
+{%- endif %}
+{%- set sriov_mtu = 9000 %}
+{%- set max_mtu = 9000 %}
+{%- set host_network_profiles_list = hosts[ansible_hostname]['network_profiles'] %}
+{%- set host_network_profile_value = hostvars[ansible_hostname]['network_profiles'][host_network_profiles_list[0]] %}
+{%- set host_interface_net_mapping = host_network_profile_value['interface_net_mapping'] %}
+{%- if 'bonding_interfaces' in host_network_profile_value %}
+    {%- set host_bonding_interfaces = host_network_profile_value['bonding_interfaces'] %}
+{%- else %}
+    {%- set host_bonding_interfaces = {} %}
+{%- endif %}
+{%- set single_nic_setup = False %}
+{%- if 'provider_network_interfaces' in host_network_profile_value %}
+    {%- set host_provider_network_interfaces = host_network_profile_value['provider_network_interfaces'] %}
+    {%- set dpdk_in_use = ((host_provider_network_interfaces.itervalues()|first).type == 'ovs-dpdk') %}
+
+    {%- if host_interface_net_mapping|length == 1 and host_provider_network_interfaces|length == 1 %}
+        {%- if host_interface_net_mapping.keys()[0] == host_provider_network_interfaces.keys()[0] %}
+            {%- set single_nic_setup = True %}
+            {%- if CLOUD_TENANT in host_networking.keys() %}
+                {%- set mtu = default_mtu %}
+                {%- if 'mtu' in host_networking[CLOUD_TENANT] %}
+                    {%- set mtu = host_networking[CLOUD_TENANT]['mtu'] %}
+                {%- endif %}
+                {%- set mtu = mtu + VXLAN_HDR_LEN %}
+                {%- if mtu > max_mtu %}
+                    {%- set max_mtu = mtu %}
+                {%- endif %}
+            {%- endif %}
+        {%-endif %}
+    {%-endif %}
+
+    {#- make a list of ixgbe devices, needed in ovs-dpdk configuration -#}
+    {%- set ixgbedevs = [] %}
+    {%- for key in hostvars[ansible_hostname].keys() %}
+        {%- if key.startswith('ansible_') %}
+            {%- set value = hostvars[ansible_hostname][key] %}
+            {%- if value is iterable and 'device' in value and 'module' in value and value['module'] == 'ixgbe' %}
+                {%- if ixgbedevs.append(value['device']) %}{%- endif %}
+            {%- endif %}
+        {%- endif %}
+    {%- endfor %}
+{%- else %}
+    {%- set host_provider_network_interfaces = {} %}
+    {%- set dpdk_in_use = False %}
+{%- endif %}
+{%- set external_ceph_cidr = None %}
+{%- if config_phase != 'setup' and 'external_ceph' in storage['backends'] %}
+    {%- set ext_ceph = storage['backends']['external_ceph'] %}
+    {%- if 'enabled' in ext_ceph and 'cidr' in ext_ceph and ext_ceph['enabled'] %}
+        {%- set external_ceph_cidr = ext_ceph['cidr'] %}
+    {%- endif %}
+{%- endif %}
+
+{% macro generate_linux_bonding_options(options) -%}
+    {%- set mode_mapping = {'active-backup' : 'active-backup', 'lacp' : '802.3ad'} -%}
+    {%- set default_options = {
+                                'active-backup' : 'miimon=100',
+                                'lacp' : 'lacp_rate=fast miimon=100'
+                              } -%}
+    {%- for i in options.split() -%}
+        {%- set key, value = i.split('=') -%}
+        {%- if key == 'mode' -%}
+            {%- if default_options[value] -%}
+                {{ 'mode=' ~ mode_mapping[value] ~ ' ' ~ default_options[value] }}
+            {%- else -%}
+                {{ 'mode=' ~ mode_mapping[value] }}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+{%- endmacro %}
+
+{% macro generate_ovs_bonding_options(options) -%}
+    {%- set mode_mapping = {'active-backup' : 'active-backup', 'lacp' : 'balance-slb', 'lacp-layer34' : 'balance-tcp'} -%}
+    {%- set default_options = {
+                                'active-backup' : '',
+                                'lacp' : 'lacp=active other_config:lacp-time=fast other_config:bond-detect-mode=carrier',
+                                'lacp-layer34' : 'lacp=active other_config:lacp-time=fast other_config:bond-detect-mode=carrier'
+                              } -%}
+    {%- for i in options.split() -%}
+        {%- set key, value = i.split('=') -%}
+        {%- if key == 'mode' -%}
+            {%- if default_options[value] -%}
+                {{ 'bond_mode=' ~ mode_mapping[value] ~ ' ' ~ default_options[value] }}
+            {%- else -%}
+                {{ 'bond_mode=' ~ mode_mapping[value] }}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+{%- endmacro %}
+
+{% macro add_static_routes(routes) -%}
+    [
+    {%- for route in routes %}
+        {
+            "ip_netmask": "{{ route.to }}", "next_hop": "{{ route.via }}"
+        } {% if not loop.last %},{% endif %}
+    {%- endfor %}
+    ]
+{%- endmacro %}
+
+{#- create network configuration input for the os-net-config -#}
+{
+"network_config": [
+{%- set loopvar = {'first_entry': True} %}
+{%- set configured_phys_ifaces = [] %}
+
+{#- single nic ifra networks are configured with the ovs provider networks -#}
+{%- if not single_nic_setup %}
+
+{#-
+If all infra ifaces on some phys iface are vlan ifaces it is configured here.
+Otherwise it gets configured normally on infra iface configuration in the next loop.
+-#}
+{%- for iface,infras in host_interface_net_mapping.iteritems() %}
+    {%- set ifacevars = {'create': True, 'mtu': 0} %}
+    {%- for infra,value in host_networking.iteritems() %}
+        {%- if infra in infras %}
+            {%- if value['interface'] == iface %}
+                {%- if ifacevars.update({'create': False}) %}{%- endif %}
+            {%- else %}
+                {%- if 'mtu' in value %}
+                    {%- set mtu = value['mtu'] %}
+                {%- else %}
+                    {%- set mtu = default_mtu %}
+                {%- endif %}
+                {%- if infra == CLOUD_TENANT %}
+                    {%- set mtu = mtu + VXLAN_HDR_LEN %}
+                {%- endif %}
+                {%- if mtu > ifacevars.mtu %}
+                    {%- if ifacevars.update({'mtu': mtu}) %}{%- endif %}
+                {%- endif %}
+            {%- endif %}
+        {%- endif %}
+    {%- endfor %}
+    {%- if ifacevars.create %}
+        {%- if not loopvar.first_entry %},{%- endif %}
+        {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+        {
+            "name": "{{iface}}",
+            {%- if 'bond' in iface %}
+                {%- for key,slaves in host_bonding_interfaces.iteritems() if key == iface %}
+                    "type": "linux_bond",
+                    {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+                    {%- if 'linux_bonding_options' in  host_network_profile_value %}
+                        "bonding_options": "{{ generate_linux_bonding_options(host_network_profile_value['linux_bonding_options']) }}",
+                    {%- endif %}
+                    "members": [ {% for slave in slaves %}
+                        {%- if configured_phys_ifaces.append(slave) %}{%- endif %}
+                        {
+                        "name": "{{slave}}",
+                        "type": "interface",
+                        {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+                        "use_dhcp": false
+                        }
+                        {% if not loop.last %},{% endif %}
+                    {%- endfor %}
+                    ],
+                {%- endfor %}
+            {%- else %}
+                {%- if configured_phys_ifaces.append(iface) %}{%- endif %}
+                "type": "interface",
+            {%- endif %}
+            {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+            "use_dhcp": false
+        }
+    {%- endif %}
+{%- endfor %}
+
+{#- configure all infra ifaces (except cloud_tenant if ovs-dpdk in use) -#}
+{%- for key,value in host_networking.iteritems() %}
+    {%- if value is iterable and 'interface' in value %}
+        {%- if key != CLOUD_TENANT or not dpdk_in_use %}{#- no dpdk or no cloud tenant -#}
+        {%- if 'mtu' in value %}{% set mtu = value['mtu'] %}{% else %}{% set mtu = default_mtu %}{% endif %}
+        {%- if key == CLOUD_TENANT %}{% set mtu = mtu + VXLAN_HDR_LEN %}{% endif %}
+        {%- if not loopvar.first_entry %},{%- endif %}
+        {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+        {
+        {%- if 'bond' in value['interface'] %}
+            {%- for bond_key,bond_value in host_bonding_interfaces.iteritems() if bond_key == value['interface'] %}
+                "name": "{{bond_key}}",
+                "type": "linux_bond",
+                "members": [ {% for member in bond_value %}
+                    {
+                    "name": "{{ member }}",
+                    "type": "interface",
+                    "mtu": {{mtu}},
+                    "use_dhcp": false
+                    }
+                    {% if not loop.last %},{% endif %}
+                {%- endfor %}
+                ],
+                {%- if 'linux_bonding_options' in  host_network_profile_value %}
+                    "bonding_options": "{{ generate_linux_bonding_options(host_network_profile_value['linux_bonding_options']) }}",
+                {%- endif %}
+            {%- endfor %}
+        {%- elif 'vlan' in value %}
+            "type": "vlan",
+            "vlan_id": {{ value['vlan'] }},
+            {%- for net_key,net_value in host_interface_net_mapping.iteritems() %}
+                {%- if key in net_value %}
+                    "device": "{{net_key}}",
+                {%- endif %}
+            {%- endfor %}
+        {%- else %}
+            {%- if configured_phys_ifaces.append(value['interface']) %}{%- endif %}
+            "name": "{{value['interface']}}",
+            "type": "interface",
+        {%- endif %}
+            "addresses": [ { "ip_netmask": "{{ value['ip'] }}/{{value['mask']}}" } ],
+            "mtu": {{mtu}},
+            {%- if (key == "infra_external" or key == "infra_access")
+                    and 'dns' in host_networking
+                    and (ansible_hostname not in groups.get('caas_nodes', [])) %}
+                "dns_servers": [{% for server in host_networking['dns'] %}"{{ server }}"{% if not loop.last %},{% endif %}{% endfor %}],
+            {%- endif %}
+            {%- set routes = [] %}
+            {%- if 'routes' in value %}
+                {%- set routes = value['routes'] %}
+            {%- endif %}
+            {%- if key == 'infra_external' and 'gateway' in value %}
+                {%- if '.' in value['gateway'] %}
+                    {% set defaultroute = '0.0.0.0/0'%}
+                {%- else %}
+                    {% set defaultroute = '::/0'%}
+                {%- endif %}
+                {%- set gw = {"to": defaultroute, "via": value['gateway']} %}
+                {%- if routes.append(gw) %}{%- endif %}
+            {%- endif %}
+            {%- if key == 'infra_access' and 'gateway' in value %}
+                {%- if 'dns' in host_networking %}
+                    {%- if '.' in value['gateway'] %}
+                        {% set mask = '/32' %}
+                    {%- else %}
+                        {% set mask = '/128' %}
+                    {%- endif %}
+                    {%- for server in host_networking['dns'] %}
+                        {%- set dnsroute = server ~ mask %}
+                        {%- set gw = {"to": dnsroute, "via": value['gateway']} %}
+                        {%- if routes.append(gw) %}{%- endif %}
+                    {%- endfor %}
+                {%- endif %}
+                {%- if external_ceph_cidr is not none %}
+                    {%- set gw = {"to": external_ceph_cidr, "via": value['gateway']} %}
+                    {%- if routes.append(gw) %}{%- endif %}
+                {%- endif %}
+            {%- endif %}
+            {%- if routes %}
+                "routes": {{ add_static_routes(routes) }},
+            {%- endif %}
+            "use_dhcp": false
+        }
+        {%- endif %}{#- no dpdk or no cloud tenant -#}
+    {%- endif %}
+{%- endfor %}
+
+{%- endif %}{#- if not single_nic_setup -#}
+
+{%- if config_phase != 'setup' or single_nic_setup %}
+
+{#- configure provider network interfaces -#}
+{%- for key,value in host_provider_network_interfaces|dictsort(true) %}
+    {%- set keyloop = loop %}
+    {%- if 'ovs' in value['type'] %}
+        {%- if not loopvar.first_entry %},{%- endif %}
+        {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+        {%- if value['type'] == 'ovs-dpdk' %}
+            {%- for bond_key,bond_value in host_bonding_interfaces.iteritems() if bond_key == key %}
+                {%- for member in bond_value %}
+                    {%- if member not in ixgbedevs %}
+                        {%- if configured_phys_ifaces.append(member) %}{%- endif %}
+                        {
+                            "name": "{{member}}",
+                            "type": "interface",
+                            "mtu": {{max_mtu}},
+                            "use_dhcp": false
+                        },
+                    {%- endif %}
+                {%- endfor %}
+            {%- endfor %}
+            {%- if 'bond' not in key and key not in ixgbedevs %}
+                {%- if configured_phys_ifaces.append(key) %}{%- endif %}
+                {
+                    "name": "{{key}}",
+                    "type": "interface",
+                    "mtu": {{max_mtu}},
+                    "use_dhcp": false
+                },
+            {%- endif %}
+        {%- endif %}
+        {
+        "name": "br-pro{{keyloop.index0}}",
+        {%- if value['type'] == 'ovs-dpdk' %}
+            "type": "ovs_user_bridge",
+        {%- else %}
+            "type": "ovs_bridge",
+        {%- endif %}
+        "members": [
+            {
+            "mtu": {{max_mtu}},
+            {%- if 'bond' in key %}
+                {%- for bond_key,bond_value in host_bonding_interfaces.iteritems() if bond_key == key %}
+                    {%- if 'ovs_bonding_options' in  host_network_profile_value %}
+                        "ovs_options": "{{ generate_ovs_bonding_options(host_network_profile_value['ovs_bonding_options']) }}",
+                    {%- endif %}
+                    "name": "{{key}}",
+                    {%- if value['type'] == 'ovs-dpdk' %}
+                        "type": "ovs_dpdk_bond",
+                        {%- if 'dpdk_max_rx_queues' in value %}
+                            "rx_queue": {{ value['dpdk_max_rx_queues'] }},
+                        {%- endif %}
+                        "members": [ {%- for member in bond_value %}
+                            {%- if configured_phys_ifaces.append(member) %}{%- endif %}
+                            {
+                            "name": "dpdk-{{member}}",
+                            "type": "ovs_dpdk_port",
+                            "mtu": {{max_mtu}},
+                            "members": [ { "name": "{{member}}", "type": "interface", "mtu": {{max_mtu}}, "use_dhcp": false } ],
+                            "use_dhcp": false
+                            }
+                            {% if not loop.last %},{% endif %}
+                        {%- endfor %}
+                        ],
+                    {%- else %}
+                        "type": "ovs_bond",
+                        "members": [ {% for member in bond_value %}
+                            {%- if configured_phys_ifaces.append(member) %}{%- endif %}
+                            {
+                            "name": "{{ member }}",
+                            "type": "interface",
+                            "mtu": {{max_mtu}},
+                            "use_dhcp": false
+                            }
+                            {% if not loop.last %},{% endif %}
+                        {%- endfor %}
+                        ],
+                    {%- endif %}
+                {%- endfor %}
+            {%- else %}
+                {%- if configured_phys_ifaces.append(key) %}{%- endif %}
+                {%- if value['type'] == 'ovs-dpdk' %}
+                    "name": "dpdk-{{key}}",
+                    "type": "ovs_dpdk_port",
+                    "mtu": {{max_mtu}},
+                    {%- if 'dpdk_max_rx_queues' in value %}
+                        "rx_queue": {{ value['dpdk_max_rx_queues'] }},
+                    {%- endif %}
+                    "members": [ { "name": "{{key}}", "type": "interface", "mtu": {{max_mtu}}, "use_dhcp": false } ],
+                {%- else %}
+                    "name": "{{key}}",
+                    "type": "interface",
+                {%- endif %}
+            {%- endif %}
+            "use_dhcp": false
+            }
+            {%- for net in value['provider_networks'] %}
+                ,
+                {
+                "name": "pro{{keyloop.index0}}-pro{{keyloop.index0}}.{{loop.index0}}",
+                "bridge_name": "br-pro{{keyloop.index0}}",
+                "type": "ovs_patch_port",
+                "peer": "pro{{keyloop.index0}}.{{loop.index0}}-pro{{keyloop.index0}}"
+                }
+            {%- endfor %}
+            {%- if single_nic_setup %}
+                {#- configure all infra ifaces -#}
+                {%- for key,value in host_networking.iteritems() %}
+                    {%- if value is iterable and 'interface' in value %}
+                        {%- if 'mtu' in value %}{% set mtu = value['mtu'] %}{% else %}{% set mtu = default_mtu %}{% endif %}
+                        {%- if key == CLOUD_TENANT %}{% set mtu = mtu + VXLAN_HDR_LEN %}{% endif %}
+                        ,
+                        {
+                        "type": "vlan",
+                        "vlan_id": {{ value['vlan'] }},
+                        "addresses": [ { "ip_netmask": "{{ value['ip'] }}/{{value['mask']}}" } ],
+                        "mtu": {{mtu}},
+                        {%- if (key == "infra_external" or key == "infra_access")
+                            and 'dns' in host_networking
+                            and (ansible_hostname not in groups.get('caas_nodes', [])) %}
+                            "dns_servers": [{% for server in host_networking['dns'] %}"{{ server }}"{% if not loop.last %},{% endif %}{% endfor %}],
+                        {%- endif %}
+                        {%- set routes = [] %}
+                        {%- if 'routes' in value %}
+                            {%- set routes = value['routes'] %}
+                        {%- endif %}
+                        {%- if key == 'infra_external' and 'gateway' in value %}
+                            {%- if '.' in value['gateway'] %}
+                                {% set defaultroute = '0.0.0.0/0'%}
+                            {%- else %}
+                                {% set defaultroute = '::/0'%}
+                            {%- endif %}
+                            {%- set gw = {"to": defaultroute, "via": value['gateway']} %}
+                            {%- if routes.append(gw) %}{%- endif %}
+                        {%- endif %}
+                        {%- if key == 'infra_access' and 'gateway' in value %}
+                            {%- if 'dns' in host_networking %}
+                                {%- if '.' in value['gateway'] %}
+                                    {% set mask = '/32' %}
+                                {%- else %}
+                                    {% set mask = '/128' %}
+                                {%- endif %}
+                                {%- for server in host_networking['dns'] %}
+                                    {%- set dnsroute = server ~ mask %}
+                                    {%- set gw = {"to": dnsroute, "via": value['gateway']} %}
+                                    {%- if routes.append(gw) %}{%- endif %}
+                                {%- endfor %}
+                            {%- endif %}
+                            {%- if external_ceph_cidr is not none %}
+                                {%- set gw = {"to": external_ceph_cidr, "via": value['gateway']} %}
+                                {%- if routes.append(gw) %}{%- endif %}
+                            {%- endif %}
+                        {%- endif %}
+                        {%- if routes %}
+                            "routes": {{ add_static_routes(routes) }},
+                        {%- endif %}
+                        "use_dhcp": false
+                        }
+                    {%- endif %}
+                {%- endfor %}
+            {%- endif %}{#- if single_nic_setup -#}
+        ]
+        }
+        {%- for net in value['provider_networks'] %}
+            ,
+            {
+            "name": "br-pro{{keyloop.index0}}.{{loop.index0}}",
+            {%- if value['type'] == 'ovs-dpdk' %}
+                "type": "ovs_user_bridge",
+            {%- else %}
+                "type": "ovs_bridge",
+            {%- endif %}
+            "ovs_fail_mode": "secure",
+            "members": [
+                {
+                "name": "pro{{keyloop.index0}}.{{loop.index0}}-pro{{keyloop.index0}}",
+                "bridge_name": "br-pro{{keyloop.index0}}.{{loop.index0}}",
+                "type": "ovs_patch_port",
+                "peer": "pro{{keyloop.index0}}-pro{{keyloop.index0}}.{{loop.index0}}"
+                }
+            ]
+            }
+        {%- endfor %}
+    {%- endif %}
+{%- endfor %}
+
+{#- configure vxlan bridge for dpdk cloud tenant -#}
+{%- if CLOUD_TENANT in host_networking.keys() and dpdk_in_use %}
+    {%- set net = host_networking[CLOUD_TENANT] %}
+    {%- if not loopvar.first_entry %},{%- endif %}
+    {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+    {
+        "type": "ovs_user_bridge",
+        "name": "br-vxlan",
+        "addresses": [ { "ip_netmask": "{{ net['ip'] }}/{{net['mask']}}" } ],
+        {%- if 'routes' in net %}
+            "routes": {{ add_static_routes(net['routes']) }},
+        {%- endif %}
+        "members": [{
+            "type": "vlan",
+            "vlan_id": {{ net['vlan'] }},
+            {%- for net_key,net_value in host_interface_net_mapping.iteritems() %}
+                {%- if CLOUD_TENANT in net_value %}
+                    "device": "{{net_key}}",
+                {%- endif %}
+            {%- endfor %}
+            {%- if 'mtu' in net %}{% set mtu = net['mtu'] %}{% else %}{% set mtu = default_mtu %}{% endif %}
+            {% set mtu = mtu + VXLAN_HDR_LEN %}
+            "mtu": {{mtu}},
+            "use_dhcp": false
+        }],
+        "ovs_extra": [ "br-set-external-id br-vxlan bridge-id br-vxlan" ]
+    }
+{%- endif %}
+{%- endif %}{#- if config_phase != 'setup' or single_nic_setup -#}
+
+{#- configure sr-iov ifaces -#}
+{%- if config_phase != 'setup' %}
+{%- if 'sriov_provider_networks' in host_network_profile_value %}
+    {%- for net,net_info in host_network_profile_value['sriov_provider_networks'].iteritems() %}
+        {%- for iface in net_info['interfaces'] %}
+            {%- if iface not in configured_phys_ifaces %}
+                {%- if not loopvar.first_entry %},{%- endif %}
+                {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+                {
+                "name": "{{iface}}",
+                "type": "interface",
+                "mtu": {{sriov_mtu}},
+                "use_dhcp": false
+                }
+            {%- endif %}
+        {%- endfor %}
+    {%- endfor %}
+{%- endif %}
+{%- endif %}{#- if config_phase != 'setup' -#}
+]
+}

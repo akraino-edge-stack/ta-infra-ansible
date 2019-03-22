@@ -1,0 +1,11 @@
+## resource management
+-a always,exit -F arch=b32 -S modify_ldt -F key=32bit_modify_ldt
+-a always,exit -F arch=b64 -S modify_ldt -F key=64bit_modify_ldt
+-a always,exit -F arch=b32 -S move_pages -F key=32bit_move_pages
+-a always,exit -F arch=b64 -S move_pages -F key=64bit_move_pages
+-a always,exit -F arch=b32 -S set_mempolicy -F key=32bit_set_mempolicy
+-a always,exit -F arch=b64 -S set_mempolicy -F key=64bit_set_mempolicy
+-a always,exit -F arch=b32 -S swapoff -F key=32bit_swapoff
+-a always,exit -F arch=b64 -S swapoff -F key=64bit_swapoff
+-a always,exit -F arch=b32 -S reboot -F key=32bit_reboot
+-a always,exit -F arch=b64 -S reboot -F key=64bit_reboot

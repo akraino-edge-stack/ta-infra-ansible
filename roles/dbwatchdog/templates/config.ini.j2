@@ -1,0 +1,9 @@
+[server]
+logging_level = info
+logging_destination = console
+verbose = true
+listening_uds = /var/run/.dbmonitor
+transport_type = stream
+hostname = {{ hostname }}
+use_systemd = True
+monitoring_interval = 5

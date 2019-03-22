@@ -1,0 +1,32 @@
+# {{ ansible_managed }}
+[restframe]
+
+#The port that the restful app will listen DEFAULT:61200
+port=61200
+#The IP address that the restful app will bind to DEFAULT:127.0.0.1
+ip_address={{ hostname }}
+
+# This option tells the restful app to run in debug mode or not. Defaults to True
+debug={{ restful_debug_mode }}
+
+#Authentication method to be used
+auth_method={{ restful_authentication_method }}
+
+#Use SSL or not
+#If true then private key and certificate has to be also given DEFAULT:False
+use_ssl=false
+#ssl_private_key=PATHTOKEY/KEY.key
+#ssl_certificate=PATHTOCERTIFICATE/CERT.crt
+
+#The directory where the handlers are 
+#Defaults to /usr/lib64/python2.7/site-packages/restfulframework/handlers
+#handler_directory=/usr/lib64/python2.7/site-packages/restfulframework/handlers
+
+[keystone]
+user={{ restful_service_user_name }}
+password={{ restful_service_password }}
+auth_uri={{ keystone_service_internaluri }}
+
+[AM]
+host={{ auth_server_service_address }}
+port={{ auth_server_service_port }}

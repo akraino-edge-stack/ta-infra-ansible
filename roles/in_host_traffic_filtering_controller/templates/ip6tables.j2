@@ -1,0 +1,91 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+
+######INPUT Chain
+#### Platform traffic
+{% set infra_external = networking['infra_external']['interface'] %}
+-6 -A INPUT ! -i {{ infra_external }} -m comment --comment "Allow Non-OAM IPv6 Traffic" -j ACCEPT
+{% if 'infra_access' in networking %}
+{% set infra_access = networking['infra_access']['interface'] %}
+-6 -A INPUT ! -i {{ infra_access }} -m comment --comment "Allow Non-OAM IPv6 Traffic" -j ACCEPT
+{% endif %}
+-6 -A INPUT -m comment --comment "Allow Related IPv6 Traffic" -m state --state RELATED,ESTABLISHED -j ACCEPT
+-6 -A INPUT -p tcp -m multiport --dports 22 -m comment --comment "Allow SSH IPv6 Connection" -j ACCEPT
+-6 -A INPUT -p tcp -m multiport --sports 6514 -m comment --comment "Allow Incoming Remote Logging" -m state --state NEW,ESTABLISHED -j ACCEPT
+
+## ICMPV6 - Allow required types
+-6 -A INPUT -p icmpv6 --icmpv6-type destination-unreachable -m comment --comment "ICMPv6 Destination Unreachable" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type packet-too-big -m comment --comment "ICMPv6 Packet Too Big" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type time-exceeded -m comment --comment "ICMPv6 Time Exceeded - Code 0 only" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type parameter-problem -m comment --comment "ICMPv6 Parameter Problem - Codes 1 and 2 only" -j ACCEPT
+
+# Allow connectivity checking messages, but rate limit.
+-6 -A INPUT -p icmpv6 --icmpv6-type echo-request -m limit --limit 900/min -m comment --comment "ICMPv6 Echo Request" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type echo-reply -m limit --limit 900/min -m comment --comment "ICMPv6 Echo Reply" -j ACCEPT
+
+# Allow others ICMPv6 types but only if the hop limit field is 255.
+-6 -A INPUT -p icmpv6 --icmpv6-type router-solicitation -m hl --hl-eq 255 -m comment --comment "ICMPv6 Router Solicitation" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type router-advertisement -m hl --hl-eq 255 -m comment --comment "ICMPv6 Router Advertisement" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type neighbor-solicitation -m hl --hl-eq 255 -m comment --comment "ICMPv6 Neighbor Solicitation" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type neighbor-advertisement -m hl --hl-eq 255 -m comment --comment "ICMPv6 Neighbor Advertisement" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type redirect -m hl --hl-eq 255 -m comment --comment "ICMPv6 Redirect" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 141 -m hl --hl-eq 255 -m comment --comment "ICMPv6 Inverse Neighbor Discovery Solicitation" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 142 -m hl --hl-eq 255 -m comment --comment "ICMPv6 Inverse Neighbor Discovery Advertisement" -j ACCEPT
+
+# Allow ICMPv6 Certificate Path Notification
+-6 -A INPUT -p icmpv6 --icmpv6-type 148 -m hl --hl-eq 255 -m comment --comment "ICMPv6 Certificate Path Solicitation" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 149 -m hl --hl-eq 255 -m comment --comment "ICMPv6 Certificate Path Advertisement" -j ACCEPT
+
+# Allow ICMPv6 link local multicast
+-6 -A INPUT -p icmpv6 --icmpv6-type 130 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Link-Local Multicast Listener Query" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 131 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Link-Local Multicast Listener Report" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 132 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Link-Local Multicast Listener Done" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 143 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Link-Local Multicast Listener Report v2" -j ACCEPT
+
+# Allow multicast router discovery
+-6 -A INPUT -p icmpv6 --icmpv6-type 151 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Multicast Router Advertisement" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 152 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Multicast Router Solicitation" -j ACCEPT
+-6 -A INPUT -p icmpv6 --icmpv6-type 153 -m hl --hl-eq 1 -m comment --comment "ICMPv6 Multicast Router Termination" -j ACCEPT
+
+# NTP and DNS
+-6 -A INPUT -p udp -m multiport --dports 123 -m comment --comment "Allow Incoming NTP" -j ACCEPT
+-6 -A INPUT -p udp -m multiport --dports 53 -m comment --comment "Allow Incoming DNS" -m state --state ESTABLISHED -j ACCEPT
+
+# SNMP traps to be received from BMC's
+-6 -A INPUT -p udp -m multiport --dports 162 -m comment --comment "Allow Incoming SNMP Traps" -j ACCEPT
+
+-6 -A INPUT -p tcp -m multiport --dports 80 -m comment --comment "Allow Incoming Horizon Dashboard" -j ACCEPT
+{% if haproxy_ssl|default(False) %}
+-6 -A INPUT -p tcp -m multiport --dports 443 -m comment --comment "Allow Incoming Horizon Dashboard" -j ACCEPT
+{% endif %}
+
+#### External HTTP interfaces
+{% set numhosts = number_of_nodes| int %}
+{% if hosts[ansible_hostname]['installation_host']|default(False) %}
+-6 -A INPUT -p tcp -m multiport --dports 8082 -m comment --comment "Allow Installer WebUI" -j ACCEPT
+-6 -A INPUT -i lo -j ACCEPT
+{% endif %}
+-6 -A INPUT -p tcp -m multiport --dports 6385 -m comment --comment "Allow Incoming Ironic Api" -j ACCEPT
+-6 -A INPUT -p tcp -m multiport --dports 5000 -m comment --comment "Allow Incoming Keystone Api" -j ACCEPT
+-6 -A INPUT -p tcp -m multiport --dports 8888 -m comment --comment "Allow Netact Interface " -j ACCEPT
+-6 -A INPUT -p tcp -m multiport --dports 61200 -m comment --comment "Allow Restful Service" -j ACCEPT
+
+-6 -A INPUT -m comment --comment "Log Dropped IPv6 Traffic" -m limit --limit 2/min -j LOG --log-prefix "iptables-in-dropped: "
+-6 -A INPUT -m comment --comment "Drop All Other Traffic" -j DROP
+
+######FORWARD Chain
+-6 -A FORWARD ! -i {{ infra_external }} -m comment --comment "Allow Forward Non-OAM IPv6 Traffic" -j ACCEPT
+{% if networking['infra_access'] is defined  and ansible_hostname in groups['compute'] %}
+-6 -A FORWARD -i {{ infra_access }} -m comment --comment "Allow Forward Non-OAM IPv6 Traffic" -j DROP
+{% endif %}
+-6 -A FORWARD -m comment --comment "Allow Forward Related IPv6 Traffic" -m state --state RELATED,ESTABLISHED -j ACCEPT
+-6 -A FORWARD -m comment --comment "Log Dropped Forwarded IPv6 Traffic" -m limit --limit 2/min -j LOG --log-prefix "iptables-fwd-dropped: "
+
+###### OUTPUT Chain
+-6 -A OUTPUT -p udp -m multiport --dports 53 -m comment --comment "Allow Outgoing DNS" -m state --state NEW,ESTABLISHED -j ACCEPT
+-6 -A OUTPUT -p tcp -m multiport --dports 6514 -m comment --comment "Allow Outgoing Remote Logging" -m state --state NEW,ESTABLISHED -j ACCEPT
+
+COMMIT

@@ -1,0 +1,54 @@
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+- name: "create or delete chroot user"
+  user:
+    name: "{{ item.name }}"
+    groups: "{{ item.group }}"
+    password: "{{ item.password | default('')}}"
+    remove: "{{ item.remove | default('yes')}}"
+    state: "{{ item.state | default('absent')}}"
+    system: no
+    shell: /bin/nologin
+    createhome: no
+  with_items: "{{ chroot | default([]) }}"
+
+- name: "Create the ssh-keys directory"
+  file:
+    path: /etc/ssh-keys
+    state: directory
+
+- name: "remove the old public ssh key"
+  file:
+    path: /etc/ssh-keys/{{ item.name }}
+    state: absent
+  with_items: "{{ chroot | default([]) }}"
+
+- name: "add a new public ssh key"
+  when: item.state == 'present'
+  lineinfile:
+    path: /etc/ssh-keys/{{ item.name }}
+    create: yes
+    regexp: '.*'
+    state: "{{ item.state | default('absent') }}"
+    line: "{{ item.public_key }}"
+    owner: "{{ item.name }}"
+    mode: 0400
+  with_items: "{{ chroot | default([]) }}"
+
+- name: Locking and Unlocking the user
+  when: item.state == 'present' and item.password != ""
+  command: sudo passwd "{{ item.name }}" "{{ item.lock_state }}"
+  with_items: "{{ chroot | default([]) }}"

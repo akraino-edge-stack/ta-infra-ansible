@@ -1,0 +1,125 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Gather variables for each operating system
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+    - "{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}-{{ ansible_distribution_version.split('.')[0] }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags:
+    - always
+
+- name: Stop all cloud-init services and disable them
+  systemd:
+    name: "{{item}}"
+    enabled: no
+    state: stopped
+  with_items:
+    - "cloud-config"
+    - "cloud-final"
+    - "cloud-init"
+    - "cloud-init-local"
+
+- name: Remove udev rule which enables dhcp on the first interface
+  file: path="/etc/udev/rules.d/70-persistent-net.rules" state=absent
+
+- name: Remove interface configuration which use dhcp
+  shell: rm -f $(grep -li BOOTPROTO.*dhcp /etc/sysconfig/network-scripts/ifcfg-* | sort -u)
+
+- set_fact:
+    root_disk_part1: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{first_part_number}}{% else %}{{root_disk}}-part{{first_part_number}}{% endif %}"
+
+- name: get volume pools
+  shell: dmsetup ls | awk '{print $1}'
+  register: volume_pools
+  ignore_errors: yes
+
+- debug:
+    msg: "volume pools: {{ volume_pools.stdout_lines }}"
+
+- name: Delete old LVMs if not mounted already
+  script: "{{role_path}}/scripts/old_vol_rm.sh"
+  args:
+    creates: /etc/partfs_rootdisk_created
+
+- name: get volume groups
+  shell: "vgs -o vg_name --noheadings | sed 's/ //g'"
+  register: volumegroups
+  ignore_errors: yes
+
+- debug:
+    msg: "volume groups: {{ volumegroups.stdout_lines }}"
+
+- name: get volume pools
+  shell: dmsetup ls | awk '{print $1}'
+  register: volume_pools
+  ignore_errors: yes
+
+- debug:
+    msg: "volume pools: {{ volume_pools.stdout_lines }}"
+
+- name: remove old volume groups
+  include: remove_old_instance_vg.yml
+
+- name: delete temporary partition
+  parted:
+    device: "{{root_disk}}"
+    number: "{{delete_partition}}"
+    state: absent
+  when: delete_partition is defined
+
+- name: system disk total size
+  shell: parted {{root_disk}} unit GB print | grep "Disk /dev/" | awk '{print $3}' | tr -d 'a-z,A-Z'
+  register: root_disk_total_size
+
+- debug:
+    msg: "root_disk_total_size.stdout {{ root_disk_total_size.stdout }}"
+
+- name: configure root volume groups
+  include: root_disk_volume_groups.yml
+  vars:
+    part_start: "{{second_part_start}}GiB"
+    part_end: "{{second_part_end}}GB"
+    phy_disk_part_number: 2
+    create_disk_part: True
+
+- name: system disk first partition size
+  shell: parted {{root_disk_part1}} unit GB print | grep "Disk /dev/" | awk '{print $3}' | tr -d 'a-z,A-Z'
+  register: first_part
+
+- debug:
+     msg: "first_part.stdout {{ first_part.stdout }}"
+
+- name: configure instance disk partition
+  parted:
+    device: "{{root_disk}}"
+    number: 3
+    part_start: "{{third_part_start}}GB"
+    flags: [ lvm ]
+    state: present
+  when: rootdisk_vg_percentage != all_disk_size_for_volume_group_vg
+
+- name: remove old volume groups
+  include: remove_old_instance_vg.yml
+
+- name: create /etc/partfs_rootdisk_created file
+  command: touch /etc/partfs_rootdisk_created
+  args:
+    creates: /etc/partfs_rootdisk_created

@@ -1,0 +1,52 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Synchronize controller ssh keys
+  hosts: management:!vnf-nodes
+  pre_tasks:
+    - name: set master_key_holder to installation_controller
+      set_fact:
+        master_key_holder: "{{ installation_controller }}"
+
+  tasks:
+    - name: Copy temporary key to slaves
+      shell: |
+        sudo -u "{{ users.admin_user_name }}" \
+            scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "/home/{{ users.admin_user_name }}/.ssh/id_rsa" "{{ hostvars[item]['ansible_host'] }}":/tmp/tmp_rsa
+      when: hostname == master_key_holder
+      with_items: "{{ groups['management'] }}"
+
+    - name: Copy ssh keys from active haproxyvip or installation controller
+      shell: |
+        sudo -u "{{ users.admin_user_name }}" \
+            ssh -i /tmp/tmp_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                "{{ hostvars[master_key_holder]['ansible_host'] }}" \
+                sudo tar -cf - "{{ item }}" |sudo tar -C / -xf -
+
+      with_items:
+        - '/etc/ssh/ssh_host_ecdsa_key'
+        - '/etc/ssh/ssh_host_ecdsa_key.pub'
+        - '/etc/ssh/ssh_host_ed25519_key'
+        - '/etc/ssh/ssh_host_ed25519_key.pub'
+        - '/etc/ssh/ssh_host_rsa_key'
+        - '/etc/ssh/ssh_host_rsa_key.pub'
+      when: master_key_holder != inventory_hostname
+
+    - name: Clean temporary key
+      file:
+        path: /tmp/tmp_rsa
+        state: absent

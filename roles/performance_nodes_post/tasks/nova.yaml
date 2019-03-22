@@ -1,0 +1,71 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Set vcpu_pin_set
+  ini_file: dest=/etc/nova/nova.conf section=DEFAULT option=vcpu_pin_set value={{ ansible_local.ncir_cpu_allocation['vm']['list'] }} backup=no
+  register: nova1_result
+
+- name: Get performance profile configuration
+  set_fact:
+    perf_profile: "{{ performance_profiles[hosts[hostname]['performance_profiles'][0]] if 'performance_profiles' in hosts[hostname] else {} }}"
+
+- debug:
+    msg:
+      - "Hugepagesz: {{perf_profile['hugepagesz']}}"
+
+- name: Construct reserved_huge_pages line for 1G case
+  set_fact:
+      numa0line: "reserved_huge_pages=node:0,size:1GB,count:4"
+      numa1line: "reserved_huge_pages=node:1,size:1GB,count:4"
+  when:
+    - perf_profile['hugepagesz'] == "1G"
+
+- name: Construct reserved_huge_pages line for 2M case
+  set_fact:
+      numa0line: "reserved_huge_pages=node:0,size:2048,count:2048"
+      numa1line: "reserved_huge_pages=node:1,size:2048,count:2048"
+  when:
+    - perf_profile['hugepagesz'] == "2M"
+
+- debug:
+    msg:
+      - "CPUs: {{ansible_processor_count}}"
+      - "NUMA0 conf: {{numa0line}}"
+      - "NUMA1 conf: {{numa1line}}"
+
+- name: Set huge page reservation for NUMA 0
+  lineinfile:
+    path: /etc/nova/nova.conf
+    insertafter: 'DEFAULT'
+    line: "{{numa0line}}"
+  register: nova2_result
+
+- name: Set huge page reservation for NUMA 1
+  lineinfile:
+    path: /etc/nova/nova.conf
+    insertafter: '{{numa0line}}'
+    line: "{{numa1line}}"
+  when:
+    - ansible_processor_count | int == 2
+  register: nova3_result
+
+- name: Restart nova compute
+  systemd:
+    name: nova-compute
+    state: "restarted"
+  when:
+    - nova1_result.changed or nova2_result.changed or nova3_result.changed
+    - "'compute' in hosts[ansible_hostname]['service_profiles']"

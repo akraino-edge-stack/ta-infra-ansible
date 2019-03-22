@@ -1,0 +1,71 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+
+
+######INPUT Chain
+#### Platform traffic
+{% set infra_external = networking['infra_external']['interface'] %}
+-A INPUT ! -i {{ infra_external }} -m comment --comment "Allow Non-OAM IPv4 Traffic" -j ACCEPT
+{% if 'infra_access' in networking %}
+{% set infra_access = networking['infra_access']['interface'] %}
+-A INPUT ! -i {{ infra_access }} -m comment --comment "Allow Non-OAM IPv4 Traffic" -j ACCEPT
+{% endif %}
+-A INPUT -m comment --comment "Allow related IPv4 traffic" -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p tcp -m multiport --dports 22 -m comment --comment "Allow SSH IPv4 Connection" -j ACCEPT
+-A INPUT -p tcp -m multiport --sports 6514 -m comment --comment "Allow Incoming Remote Logging" -m state --state NEW,ESTABLISHED -j ACCEPT
+
+# Drop all packets from same source over the rate limit
+# To prevent Sockstress TCP DoS attack
+-A INPUT -p tcp -m state --state NEW -m recent --set
+-A INPUT -p tcp -m state --state NEW -m recent --update --seconds 1 --hitcount 20 -j DROP
+
+# Drop all NULL packets.
+-A INPUT -p tcp --tcp-flags ALL NONE -j DROP
+
+# ICMP - Allow required types
+-A INPUT -p icmp -m icmp --icmp-type 8 -m comment --comment "ICMP Echo Requests" -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 0 -m comment --comment "ICMP Echo Replies" -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 11 -m comment --comment "ICMP TTL Exceeded" -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 3 -m comment --comment "ICMP Destination Unreachable" -j ACCEPT
+
+# NTP and DNS
+-A INPUT -p udp -m multiport --dports 123 -m comment --comment "Allow Incoming NTP" -j ACCEPT
+-A INPUT -p udp -m multiport --dports 53 -m comment --comment "Allow Incoming DNS" -m state --state ESTABLISHED -j ACCEPT
+
+# SNMP traps to be received from BMC's
+-A INPUT -p udp -m multiport --dports 162 -m comment --comment "Allow Incoming SNMP Traps" -j ACCEPT
+
+-A INPUT -p tcp -m multiport --dports 80 -m comment --comment "Allow Incoming Horizon Dashboard" -j ACCEPT
+{% if haproxy_ssl|default(False) %}
+-A INPUT -p tcp -m multiport --dports 443 -m comment --comment "Allow Incoming Horizon Dashboard" -j ACCEPT
+{% endif %}
+
+#### External HTTP interfaces
+{% if hosts[ansible_hostname]['installation_host']|default(False) %}
+-A INPUT -p tcp -m multiport --dports 8082 -m comment --comment "Allow Installer WebUI" -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+{% endif %}
+-A INPUT -p tcp -m multiport --dports 6385 -m comment --comment "Allow Incoming Ironic Api" -j ACCEPT
+-A INPUT -p tcp -m multiport --dports 5000 -m comment --comment "Allow Incoming Keystone Api" -j ACCEPT
+-A INPUT -p tcp -m multiport --dports 8888 -m comment --comment "Allow Netact Interface " -j ACCEPT
+-A INPUT -p tcp -m multiport --dports 61200 -m comment --comment "Allow Restful Service" -j ACCEPT
+-A INPUT -p tcp -m multiport --dports {{base_shell_inabox_port}}{% if number_of_nodes|int > 1%}:{{base_shell_inabox_port + number_of_nodes|int - 1}}{% endif %} -m comment --comment "Allow Shell in a box" -j ACCEPT
+
+-A INPUT -m comment --comment "Log Dropped IPv4 Traffic" -m limit --limit 2/min -j LOG --log-prefix "iptables-in-dropped: "
+-A INPUT -m comment --comment "Drop All Other Traffic" -j DROP
+
+######FORWARD Chain
+-A FORWARD ! -i {{ infra_external }} -m comment --comment "Allow Forward Non-OAM IPv4 Traffic" -j ACCEPT
+{% if networking['infra_access'] is defined and ansible_hostname in groups['compute']%}
+-A FORWARD -i {{ infra_access }} -m comment --comment "Allow Forward Non-OAM IPv4 Traffic" -j DROP
+{% endif %}
+-A FORWARD -m comment --comment "Allow Forward Related IPv4 Traffic" -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -m comment --comment "Log Dropped Forwarded IPv4 Traffic" -m limit --limit 2/min -j LOG --log-prefix "iptables-fwd-dropped: "
+
+######OUTPUT Chain
+-A OUTPUT -p tcp -m multiport --dports 6514 -m comment --comment "Allow Outgoing remote logging" -m state --state NEW,ESTABLISHED -j ACCEPT
+-A OUTPUT -p udp -m multiport --dports 53 -m comment --comment "Allow Outgoing DNS" -m state --state NEW,ESTABLISHED -j ACCEPT
+
+COMMIT

@@ -1,0 +1,20 @@
+[cmserver]
+ip=config-manager
+port=61100
+backend_api=cmframework.redisbackend.cmredisdb.CMRedisDB
+backend_uri=redis://:{{ redis_password }}@rediscontroller:6379
+log_level=debug
+log_dest=console
+validators=/opt/cmframework/validators
+activators=/opt/cmframework/activators
+disable_remote_activation=True
+verbose=True
+inventory_handlers=/opt/cmframework/inventoryhandlers
+inventory_data=/opt/cmframework/inventory.data
+install_phase=False
+activationstate_handler_api=cmframework.utils.cmdsshandler.CMDSSHandler
+activationstate_handler_uri=/run/.dss-server
+activator_workers=10
+snapshot_handler_api=cmframework.utils.cmdsshandler.CMDSSHandler
+snapshot_handler_uri=/run/.dss-server
+alarmhandler_api=cmframework.lib.cmalarmhandler_dummy.AlarmHandler_Dummy

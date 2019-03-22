@@ -1,0 +1,73 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Setup hostname
+  hostname:
+    name: "{{ physical_host }}"
+
+- name: Updating the facts due to hostname change
+  setup:
+
+- set_fact:
+    host_network_profile_name: "{{hosts[ansible_hostname]['network_profiles']}}"
+
+- set_fact:
+    provider_network_type: "{{network_profiles[host_network_profile_name[0]]['provider_network_interfaces']|json_query('*.type')}}"
+  when: "'provider_network_interfaces' in network_profiles[host_network_profile_name[0]]"
+
+- set_fact:
+    os_net_config_options: "--detailed-exit-codes -v -c /etc/os-net-config/config.json"
+  when:
+    - hostname != installation_controller
+
+- set_fact:
+    os_net_config_options: "--no-activate --detailed-exit-codes -v -c /etc/os-net-config/config.json"
+  when:
+    - hostname == installation_controller
+    - "'ovs-dpdk' in provider_network_type"
+
+- set_fact:
+    os_net_config_options: "--detailed-exit-codes -v -c /etc/os-net-config/config.json"
+  when:
+    - hostname == installation_controller
+    - "'ovs-dpdk' not in provider_network_type"
+
+- name: Enable network service
+  service:
+    name: 'network.service'
+    enabled: "yes"
+
+- name: Create /etc/os-net-config/config.json file
+  vars:
+    config_phase: "{{ lookup('env','CONFIG_PHASE') }}"
+  template:
+    src: "os_net_config.j2"
+    dest: "/etc/os-net-config/config.json"
+    owner: "root"
+    mode: "0440"
+
+- name: Run os-net-config command
+  command: "os-net-config {{ os_net_config_options }}"
+  register: os_net_config_result
+  failed_when: not (os_net_config_result.rc == 0 or os_net_config_result.rc == 2)
+  changed_when: os_net_config_result.rc == 2
+
+- debug: var=os_net_config_result.stderr_lines
+  when: os_net_config_result.rc == 2
+
+- name: Updating the facts due to net changes
+  setup:
+  when: os_net_config_result.rc != 0

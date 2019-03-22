@@ -1,0 +1,71 @@
+# cmframework.requires:os-nova-install.yml
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- hosts: baremetal-nodes
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  roles:
+  - role: cleanup_disks
+    vars:
+      disks: "{{ bare_lvm.disks }}"
+      creates_file: "/etc/storage/bare_lvm_disks_cleaned"
+    when: bare_lvm is defined
+  post_tasks:
+  - name: create /etc/storage/bare_lvm_disks_cleaned
+    command: "touch /etc/storage/bare_lvm_disks_cleaned"
+    args:
+      creates: /etc/storage/bare_lvm_disks_cleaned
+    when: bare_lvm is defined
+
+- name: Create bare LVM backend
+  hosts: baremetal-nodes
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  vars:
+
+  tasks:
+  - name: initialize storage percentage
+    set_fact:
+      bare_lvm_storage_percent: "{{ 100 - instance_lv_percentage|default(0) }}"
+    when:
+      - bare_lvm is defined
+
+  - include_tasks: make_instance_disk_partitions.yml
+    vars:
+      instance_disks: "{{ bare_lvm.disks }}"
+      partition_number: "1"
+    when:
+      - bare_lvm is defined
+
+  - include_tasks: prepare_lvm_backend.yml
+    vars:
+      instance_physical_volumes: "{{ bare_lvm.physical_volumes }}"
+      lv_percentage: "{{ bare_lvm_storage_percent }}"
+      vgname: 'nova'
+      lvname: '{{ bare_lvm.name }}'
+      filesystem: 'xfs'
+      mountdir: '{{ bare_lvm.mount_dir }}'
+      mountpoint: '{{ bare_lvm.mount_dir }}'
+      mountoptions: '{{ bare_lvm.mount_options }}'
+      owner: root
+      group: root
+    when:
+      - bare_lvm is defined

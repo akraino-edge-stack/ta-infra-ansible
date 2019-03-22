@@ -1,0 +1,3 @@
+## reading kernel parameters
+-a always,exit -F arch=b32 -S _sysctl -F key=32bit__sysctl
+-a always,exit -F arch=b64 -S _sysctl -F key=64bit__sysctl

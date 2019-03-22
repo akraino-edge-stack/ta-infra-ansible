@@ -1,0 +1,76 @@
+# cmframework.requires: enable_provisioning_in_iptables.yml,hasdisablerecovery.yml,remove_node_from_barematel.yml
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+- name:  Make sure to remove leftover NFS mount points on other controllers where Ironic conductor is running
+  hosts: ironic_conductor
+  gather_facts: False
+  tasks:
+    - include: baremetal-rm-nfs-mnt.yaml
+      when:
+        - installation_phase != "provisioning-started"
+        - hosts|count > 1
+        - reinitialized_nodes is not defined or (inventory_hostname not in reinitialized_nodes)
+
+
+- name: Make sure nfs server is toren down before we start
+  hosts: baremetal-infra_hosts
+  tasks:
+    - include: baremetal-rm-nfs-server.yaml
+      when:
+        - hosts|count > 1
+        - reinitialized_nodes is not defined or (inventory_hostname not in reinitialized_nodes)
+
+- name: NFS server setup
+  hosts: baremetal-infra_hosts
+  tasks:
+    - include: baremetal-setup-nfs-server.yaml
+      when: hosts|count > 1
+
+- name:  Setup NFS mount points on other controllers where Ironic conductor is running
+  hosts: ironic_conductor
+  gather_facts: False
+  tasks:
+    - include: baremetal-setup-nfs-mnt.yaml
+      when:
+        - installation_phase != "provisioning-started"
+        - hosts|count > 1
+        - reinitialized_nodes is not defined or (inventory_hostname not in reinitialized_nodes)
+
+- name: Install baremetal nodes for this cloud infra
+  hosts: baremetal-infra_hosts
+  gather_facts: "{{ gather_facts | default(True) }}"
+  max_fail_percentage: 20
+  roles:
+    - role: baremetal_provision
+      when: hosts|count > 1
+
+- name:  Tear down NFS mount points on other controllers where Ironic conductor is running
+  hosts: ironic_conductor
+  gather_facts: False
+  tasks:
+    - include: baremetal-rm-nfs-mnt.yaml
+      when:
+        - installation_phase != "provisioning-started"
+        - hosts|count > 1
+
+- name: NFS server tear down
+  hosts: baremetal-infra_hosts
+  tasks:
+    - include: baremetal-rm-nfs-server.yaml
+      when:
+        - hosts|count > 1

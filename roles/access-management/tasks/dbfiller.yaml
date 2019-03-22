@@ -1,0 +1,45 @@
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Create AM values json file
+  template:
+    src: db_am_values.json.j2
+    dest: "{{ am_server_values_dir }}/db_am_values.json"
+
+- name: Create service values json file
+  template:
+    src: db_service_values.json.j2
+    dest: "{{ am_server_values_dir }}/db_service_values.json"
+
+- name: Copy private key to temp location
+  copy:
+    src: templates/am_pri_key.pem
+    dest: "{{ am_server_temp_dir }}"
+
+- name: Create DB filler python script
+  template:
+    src: dbfiller.py.j2
+    dest: "{{ am_server_temp_dir }}/dbfiller.py"
+
+- name: DB filler log file creation and rights set
+  file:
+    path: "{{ am_config.Logging.logdir }}/dbfiller.log"
+    owner: access-manager
+    group: access-manager
+    mode: 0660
+    state: touch
+
+- name: Run the DB filler python script
+  run_once: true
+  shell: "python {{ am_server_temp_dir }}/dbfiller.py >> {{ am_config.Logging.logdir }}/dbfiller.log"

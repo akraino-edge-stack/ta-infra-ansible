@@ -1,0 +1,72 @@
+global_defs {
+    enable_script_security
+    script_user root
+}
+
+vrrp_script check_master {
+    script  "/opt/monitoring/monitoring_can_become_master.sh"
+    interval 5
+    fall 1
+    rise 1
+}
+
+vrrp_instance virtual_vip {
+    interface {{ networking['infra_internal']['interface'] }}
+
+    track_interface {
+		{{ networking['infra_internal']['interface'] }}
+		{{ networking['infra_external']['interface'] }}
+    }
+
+    state BACKUP
+
+    virtual_router_id 50
+
+    priority 100
+
+    unicast_src_ip {{ networking['infra_internal']['ip'] }}
+
+	{% for peer in groups['management'] %}
+	{% if peer != inventory_hostname %}
+	unicast_peer {
+		{{ hostvars[peer]['networking']['infra_internal']['ip'] }}
+	}
+    {% endif %}
+	{% endfor %}
+
+    advert_int 5
+
+    virtual_ipaddress {
+        {{ internal_lb_vip_address }}/{{ networking['infra_internal']['mask'] }} dev {{ networking['infra_internal']['interface'] }}
+        {{ external_lb_vip_address }}/32 dev {{ networking['infra_external']['interface'] }}
+    }
+
+    track_script {
+        check_master
+    }
+
+    notify /opt/monitoring/monitoring_state_changed.sh
+
+}
+
+{% if groups['management']|length > 1 %}
+virtual_server group management {
+    delay_loop 10
+    quorum 2
+    quorum_up /opt/monitoring/monitoring_quorum_up.sh
+    quorum_down /opt/monitoring/monitoring_quorum_down.sh
+
+	{% for peer in groups['management'] %}
+    real_server {{ hostvars[peer]['networking']['infra_internal']['ip'] }} {{ keepalivedmonitor_port }} {
+        weight 1
+        TCP_CHECK {
+            connect_timeout 3
+            fwmark 10
+            warmup 120
+            retry 5
+            delay_before_retry 3
+        }
+    }
+	{% endfor %}
+}
+{% endif %}

@@ -1,0 +1,14 @@
+[server]
+logging_level = info
+logging_destination = console
+verbose = true
+listening_uds = /var/run/.dss-server
+transport_type = stream
+[plugin]
+{%if groups['management']|length > 1 %}
+plugin = /opt/dss-server/plugins/dssetcd.py
+config = /etc/distributed-state-server-etcd-plugin/config.ini
+{% else %}
+plugin = /opt/dss-server/plugins/dssfile.py
+config = /etc/distributed-state-server-file-plugin/config.ini
+{% endif %}

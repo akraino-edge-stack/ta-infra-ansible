@@ -1,0 +1,13 @@
+[Unit]
+
+[Service]
+PermissionsStartOnly=true
+ExecStartPre=/opt/monitoring/dbwatchdog.sh kill-old {{ groups['management']|join(',') }}
+ExecStartPre=/opt/monitoring/dbwatchdog.sh start-pre {{ groups['management']|join(',') }}
+
+.include /usr/lib/systemd/system/mariadb.service
+
+[Service]
+ExecStartPost=/opt/monitoring/dbwatchdog.sh start-post {{ groups['management']|join(',') }}
+ExecStop=/opt/monitoring/dbwatchdog.sh stop {{ groups['management']|join(',') }}
+ExecStopPost=/opt/monitoring/dbwatchdog.sh stop-post {{ groups['management']|join(',') }}

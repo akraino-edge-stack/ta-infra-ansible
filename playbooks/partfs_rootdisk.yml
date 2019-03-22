@@ -1,0 +1,41 @@
+# cmframework.requires: baremetal-install.yml
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Configure Root disk partitions
+  hosts: baremetal-nodes:!localhost
+  pre_tasks:
+   - name: set generic partfs_valid_nodes variable
+     set_fact:
+      partfs_valid_nodes: "{{groups['baremetal-nodes']}}"
+
+   - name: check for reinitialize or scaleout
+     set_fact:
+      partfs_valid_nodes: "{{ scaled_out_nodes|default(reinitialized_nodes) }}"
+     when: scaled_out_nodes is defined or reinitialized_nodes is defined
+
+   - debug:
+      msg: "===> partfs_valid_nodes {{ partfs_valid_nodes }}"
+
+  roles:
+      - role: partfs_rootdisk
+        when: inventory_hostname != installation_controller and reinitialized_nodes is not defined and scaled_out_nodes is not defined
+
+      - role: partfs_rootdisk
+        when: (reinitialized_nodes is defined or scaled_out_nodes is defined) and inventory_hostname in partfs_valid_nodes
+  vars:
+    first_part_number: 1
+    delete_partition: 2

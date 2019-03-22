@@ -1,0 +1,13 @@
+[Unit]
+Description=redis controlling service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/monitoring/rediscontroller.sh
+ExecStopPost=/opt/monitoring/become-redis-slave.sh "{{ internal_lb_vip_address }}"
+ExecStartPost=/opt/monitoring/become-redis-master.sh
+Restart=always
+
+#[Install]
+#WantedBy=multi-user.target

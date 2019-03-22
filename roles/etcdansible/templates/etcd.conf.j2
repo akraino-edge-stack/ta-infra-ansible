@@ -1,0 +1,14 @@
+ETCD_DATA_DIR="/var/lib/etcd/default.etcd"
+ETCD_NAME={{ inventory_hostname }}
+ETCD_LISTEN_PEER_URLS=http://{{ networking['infra_internal']['ip'] }}:2380
+ETCD_LISTEN_CLIENT_URLS=http://{{ networking['infra_internal']['ip'] }}:2379
+ETCD_INITIAL_ADVERTISE_PEER_URLS=http://{{ networking['infra_internal']['ip'] }}:2380
+ETCD_INITIAL_CLUSTER={% for node in groups['management'] %}{{ node }}=http://{{ hostvars[node]['networking']['infra_internal']['ip'] }}:2380{% if not loop.last %},{% endif %}{% endfor %}
+
+{% if reinitialized_nodes is defined and inventory_hostname in reinitialized_nodes %}
+ETCD_INITIAL_CLUSTER_STATE=existing
+{% else %}
+ETCD_INITIAL_CLUSTER_STATE=new
+{% endif %}
+ETCD_INITIAL_CLUSTER_TOKEN={{ name }}
+ETCD_ADVERTISE_CLIENT_URLS=http://{{ networking['infra_internal']['ip'] }}:2379

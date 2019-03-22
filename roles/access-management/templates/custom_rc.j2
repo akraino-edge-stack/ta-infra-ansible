@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+export LC_ALL=C
+
+# COMMON CINDER ENVS
+export CINDER_ENDPOINT_TYPE={{ openrc_clouds_yml_interface }}
+
+# COMMON NOVA ENVS
+export NOVA_ENDPOINT_TYPE={{ openrc_clouds_yml_interface }}
+
+# COMMON OPENSTACK ENVS
+export OS_ENDPOINT_TYPE={{ openrc_clouds_yml_interface }}
+export OS_INTERFACE={{ openrc_clouds_yml_interface }}
+export OS_PROJECT_NAME={{ am_project_name }}
+export OS_TENANT_NAME={{ am_project_name }}
+echo "Please enter your OpenStack Username for project $OS_PROJECT_NAME: "
+read OS_USERNAME_INPUT
+export OS_USERNAME=$OS_USERNAME_INPUT
+echo "Please enter your OpenStack Password for project $OS_PROJECT_NAME as user $OS_USERNAME: "
+read -sr OS_PASSWORD_INPUT
+export OS_PASSWORD=$OS_PASSWORD_INPUT
+export OS_AUTH_URL={{ openrc_os_auth_url }}
+export OS_NO_CACHE=1
+export OS_USER_DOMAIN_NAME={{ openrc_os_domain_name }}
+export OS_PROJECT_DOMAIN_NAME={{ openrc_os_domain_name }}
+export OS_REGION_NAME={{ openrc_region_name }}
+export PS1='[\u@\h \W($OS_USERNAME_INPUT)]\$ '
+export OS_REST_URL={{ service_internaluri_proto }}://{{ internal_lb_vip_address }}:{{ restful_service_port }}
+
+# For openstackclient
+{% if openrc_os_auth_url.endswith('v2.0') %}
+export OS_IDENTITY_API_VERSION=2.0
+export OS_AUTH_VERSION=2
+{% else %}
+export OS_IDENTITY_API_VERSION=3
+export OS_AUTH_VERSION=3
+{% endif %}

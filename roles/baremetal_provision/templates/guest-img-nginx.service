@@ -1,0 +1,35 @@
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[Unit]
+Description=The nginx HTTP for hosting guest-image.img during ironic node provisioning
+After=network.target remote-fs.target nss-lookup.target
+
+[Service]
+Type=forking
+PIDFile=/run/guest-img-nginx.pid
+# Nginx will fail to start if /run/guest-img-nginx.pid already exists but has the wrong
+# SELinux context. This might happen when running `nginx -t` from the cmdline.
+# https://bugzilla.redhat.com/show_bug.cgi?id=1268621
+ExecStartPre=/usr/bin/rm -f /run/guest-img-nginx.pid
+ExecStartPre=/usr/sbin/nginx -t -c /opt/guest-img-nginx/nginx.conf
+ExecStart=/usr/sbin/nginx -c /opt/guest-img-nginx/nginx.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+KillSignal=SIGQUIT
+TimeoutStopSec=5
+KillMode=process
+#PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

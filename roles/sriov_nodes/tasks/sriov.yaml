@@ -1,0 +1,53 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Set sriov config dir variable
+  set_fact:
+    sriov_conf_dir: "/etc/sriov"
+
+- name:  ensure sriov config dir exists
+  file:
+    path: "{{ sriov_conf_dir }}"
+    recurse: "yes"
+    state: "directory"
+    mode: "0755"
+
+- name: Create /etc/sriov/sriov.conf file
+  template:
+    src: "sriov.conf.j2"
+    dest: "{{ sriov_conf_dir }}/sriov.conf"
+    owner: "root"
+    mode: "0644"
+
+- name: Configure VF count
+  script: configure_vf_count.sh
+  register: configure_vf_count_result
+  failed_when: not (configure_vf_count_result.rc == 0 or configure_vf_count_result.rc == 2)
+  changed_when: configure_vf_count_result.rc == 2
+
+- debug: var=configure_vf_count_result.stdout_lines
+  when: configure_vf_count_result.rc != 0
+
+- debug: var=configure_vf_count_result.stderr_lines
+  when: configure_vf_count_result.rc != 0
+
+- name: Restart sriov service
+  systemd:
+    service: sriov
+    state: restarted
+  when:
+    - hostname == installation_controller
+    - ('caas_master' in hosts[hostname]['service_profiles']) or ('caas_worker' in hosts[hostname]['service_profiles'])

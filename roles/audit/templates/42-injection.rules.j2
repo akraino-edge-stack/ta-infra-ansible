@@ -1,0 +1,32 @@
+## These rules watch for code injection by the ptrace facility.
+## This could indicate someone trying to do something bad or
+## just debugging
+
+#-a always,exit -F arch=b32 -S ptrace -F key=tracing
+#-a always,exit -F arch=b64 -S ptrace -F key=tracing
+-a always,exit -F arch=b32 -S ptrace -F a0=0x4 -F key=code-injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x4 -F key=code-injection
+-a always,exit -F arch=b32 -S ptrace -F a0=0x5 -F key=data-injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x5 -F key=data-injection
+-a always,exit -F arch=b32 -S ptrace -F a0=0x6 -F key=register-injection
+-a always,exit -F arch=b64 -S ptrace -F a0=0x6 -F key=register-injection
+-a always,exit -F arch=b64 -S ptrace -F key=64bit_ptrace
+-a always,exit -F arch=b32 -S ptrace -F key=32bit_ptrace
+-a always,exit -F arch=b32 -S tgkill -F key=32bit_tgkill
+-a always,exit -F arch=b64 -S tgkill -F key=64bit_tgkill
+-a always,exit -F arch=b32 -S tkill -F key=32bit_tkill
+-a always,exit -F arch=b64 -S tkill -F key=64bit_tkill
+-a always,exit -F arch=b32 -S kill -F key=32bit_kill
+-a always,exit -F arch=b64 -S kill -F key=64bit_kill
+-a always,exit -F arch=b32 -S prlimit64 -F key=32bit_prlimit64
+-a always,exit -F arch=b64 -S prlimit64 -F key=64bit_prlimit64
+-a always,exit -F arch=b32 -S unshare -F key=32bit_unshare
+-a always,exit -F arch=b64 -S unshare -F key=64bit_unshare
+-a always,exit -F arch=b32 -S set_thread_area -F key=32bit_set_thread_area
+-a always,exit -F arch=b64 -S set_thread_area -F key=64bit_set_thread_area
+-a always,exit -F arch=b32 -S sched_setattr -F key=32bit_sched_setattr
+-a always,exit -F arch=b64 -S sched_setattr -F key=64bit_sched_setattr
+-a always,exit -F arch=b32 -S pivot_root -F key=32bit_pivot_root
+-a always,exit -F arch=b64 -S pivot_root -F key=64bit_pivot_root
+-a always,exit -F arch=b32 -S setns -F key=32bit_setns
+-a always,exit -F arch=b64 -S setns -F key=64bit_setns

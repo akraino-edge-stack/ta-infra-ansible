@@ -1,0 +1,61 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Deactivate ipmi sol
+  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[item.name]['hwmgmt']['address']}} -U {{hosts[item.name]['hwmgmt']['user']}} -P {{hosts[item.name]['hwmgmt']['password']}} sol deactivate"
+  with_items: "{{baremetal_ironic_nodes_ids}}"
+  ignore_errors: yes
+  no_log: True
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Disable shellinabox console logging for target nodes
+  environment:
+    OS_AUTH_TOKEN: "fake-token"
+    IRONIC_URL: "{{ ironic_service_adminurl }}"
+  command: "ironic node-set-console-mode {{item.name}} false"
+  with_items: "{{ baremetal_ironic_nodes_ids }}"
+  when:
+    - installation_phase == "provisioning-started"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Disable shellinabox console logging for target nodes
+  command: "openstack --os-cloud default baremetal node console disable {{item.name}}"
+  with_items: "{{ baremetal_ironic_nodes_ids }}"
+  when:
+    - installation_phase != "provisioning-started"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create directories for tmux
+  file:
+    path: "{{item}}"
+    state: directory
+    mode: u=rwx,g=rwx,o=rwx
+  with_items:
+    - "/var/log/ironic/console_logs"
+    - "/tmp/tmp_console"
+
+- name: Start tmux console session
+  shell: "source /opt/tmux_setup/tmux.inc; tmux_session_start bash /bin/bash"
+
+- name: Start tmux windows for each nodes
+  shell: "source /opt/tmux_setup/tmux.inc; tmux_cmd {{item.name}} /usr/bin/ipmitool -I lanplus -H {{hosts[item.name]['hwmgmt']['address']}} -U {{hosts[item.name]['hwmgmt']['user']}} -P {{hosts[item.name]['hwmgmt']['password']}} sol activate"
+  no_log: True
+  with_items: "{{baremetal_ironic_nodes_ids}}"
+  loop_control:
+    label: "{{ item.name }}"

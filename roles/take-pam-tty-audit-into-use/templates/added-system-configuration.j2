@@ -1,0 +1,10 @@
+#
+# {{ ansible_managed }}
+#
+session    required     pam_tty_audit.so enable=*
+
+auth include system-auth-ac
+account include system-auth-ac
+password    required    pam_pwquality.so retry=3
+password include system-auth-ac
+session include system-auth-ac

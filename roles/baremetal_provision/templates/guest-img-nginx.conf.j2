@@ -1,0 +1,12 @@
+http{
+    server {
+            listen {{golden_image_http_port}};
+            root /opt/images/;
+            location / {
+            }
+            location /bootimages {
+                alias /remote_image_share_root/;
+            }
+        }
+    }
+events{}

@@ -1,0 +1,102 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Set basic facts
+  set_fact:
+    deploy_pem: False
+    upload_pem: False
+    pem_location: ""
+  tags:
+    - runtime
+
+- name: Check if custom pem installed during deploy
+  stat:
+    path: "/opt/installer-ui/certificates/certificate.pem"
+  register: stat_result_deploy
+  tags:
+   - runtime
+
+- name: Set fact deploy_pem
+  set_fact:
+    deploy_pem: True
+    upload_pem: False
+    pem_location: "/opt/installer-ui/certificates/certificate.pem"
+  when: stat_result_deploy.stat.exists == True
+  tags:
+    - runtime
+
+- name: Check if pem is uploaded
+  stat:
+    path: "/tmp/certificate.pem"
+  register: stat_result_uploaded
+  tags:
+    - runtime
+  when: deploy_pem == False
+
+- name: Set fact upload_pem
+  set_fact:
+    upload_pem: True
+    deploy_pem: False
+    pem_location: "/tmp/certificate.pem"
+  when: stat_result_uploaded.stat.exists == True
+  tags:
+    - runtime
+
+- name: Validate certificate
+  openssl_certificate:
+    path: "{{ pem_location }}"
+    provider: assertonly
+    has_expired: False
+  tags:
+    - runtime
+  when: upload_pem == True or deploy_pem == True
+
+- name: Synchronize pem
+  synchronize:
+    src: "{{ pem_location }}"
+    dest: "/tmp/certificate.pem"
+  tags:
+    - runtime
+  become: yes
+  when: upload_pem == True or deploy_pem == True
+
+- name: Copy pem
+  copy:
+    src: "/tmp/certificate.pem"
+    dest: "/etc/ssl/private/certificate.pem"
+  tags:
+    - runtime
+  when: upload_pem == True or deploy_pem == True
+
+- name: Set permissions for pem
+  file:
+    path: "/etc/ssl/private/certificate.pem"
+    mode: '0440'
+    group: 'ironic'
+    owner: 'root'
+  tags:
+    - runtime
+  when: upload_pem == True or deploy_pem == True
+
+- name: Restart haproxy
+  service:
+    name: "haproxy"
+    state: "restarted"
+    enabled: yes
+    daemon_reload: "{{ (ansible_service_mgr == 'systemd') | ternary('yes', omit) }}"
+  tags:
+    - runtime
+  when: upload_pem == True or deploy_pem == True

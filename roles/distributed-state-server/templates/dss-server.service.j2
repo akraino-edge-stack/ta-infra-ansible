@@ -1,0 +1,14 @@
+[Unit]
+Description=distributed state server
+After=network.target
+{%if groups['management']|length > 1 %}
+Requires=etcd.service
+{% endif %}
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dss --config /etc/distributed-state-server/config.ini
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

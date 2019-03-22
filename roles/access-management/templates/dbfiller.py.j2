@@ -1,0 +1,312 @@
+import ConfigParser
+
+import logging
+import os
+import sys
+import M2Crypto
+import time
+
+from keystoneauth1.identity import v3
+from keystoneauth1 import session
+from keystoneauth1.exceptions.http import Conflict
+from keystoneclient import utils
+from keystoneclient.v3 import client
+
+sys.path.append('{{ lib_source_folder }}')
+from access_management.db.amdb import AMDatabase
+from access_management.cryptohelper.decryptaaafiles import DecryptAAAFile
+
+
+def get_config():
+    config = ConfigParser.ConfigParser()
+    config.read("/{{ am_plugin_config_path }}")
+    config_dict = {s: dict(config.items(s)) for s in config.sections()}
+    return config_dict
+
+
+def set_logger():
+    logger = logging.getLogger("DBfiller")
+    shandler = logging.StreamHandler(sys.stdout)
+    shandler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    shandler.setFormatter(formatter)
+    logger.addHandler(shandler)
+    logger.info("logger set")
+    return logger
+
+
+def close_logger_handlers(logger):
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+
+
+def read_files():
+    users = []
+    roles = []
+    permissions = []
+    user_roles = []
+    role_permissions = []
+    dir = "{{ am_server_values_dir }}"
+    for encrypted_file in os.listdir(dir):
+        if os.stat(os.path.join(dir, encrypted_file)).st_uid is not 0:
+            print "--- File: ", encrypted_file, "is not of root, skipping"
+            continue
+        try:
+            crypter = DecryptAAAFile("{{ am_server_temp_dir }}/am_pri_key.pem")
+            jsoned_content = crypter.decrypt_file(os.path.join(dir, encrypted_file))
+            for user in jsoned_content["users"]:
+                users.append(user)
+            for role in jsoned_content["roles"]:
+                roles.append(role)
+            for permission in jsoned_content["permissions"]:
+                permissions.append(permission)
+            for user_role in jsoned_content["user_roles"]:
+                user_roles.append(user_role)
+            for role_permission in jsoned_content["role_permissions"]:
+                role_permissions.append(role_permission)
+        except M2Crypto.RSA.RSAError as ex:
+            print "Failed to decrypt file: {}, {}".format(encrypted_file, str(ex))
+        except Exception as ex:
+            print "File {} failed with error: {}".format(encrypted_file, str(ex))
+    users = map(list, set(map(tuple, users)))
+    roles = map(list, set(map(tuple, roles)))
+    permissions = map(list, set(map(tuple, permissions)))
+    user_roles = map(list, set(map(tuple, user_roles)))
+    role_permissions = map(list, set(map(tuple, role_permissions)))
+    return {"users": users, "roles": roles, "permissions": permissions, "user_roles": user_roles, "role_permissions": role_permissions}
+
+
+def get_db_content(db):
+    db.create_tables()
+    users = db.get_user_table()
+    roles = db.get_role_table()
+    permissions = db.get_resource_table()
+    user_roles = db.get_user_role_table()
+    role_permissions = db.get_role_resource_table()
+    return {"users": users, "roles": roles, "permissions": permissions, "user_roles": user_roles, "role_permissions": role_permissions}
+
+
+def compare_contents(db_content, files_content):
+    update_needed = {"roles":[], "permissions":[]}
+    adding_needed = {"users":[], "roles":[], "permissions":[], "user_roles":[], "role_permissions":[]}
+    for file_user in files_content["users"]:
+        if check_user_value(file_user, db_content["users"]):
+            print "User " + file_user[0] + " is ok"
+        else:
+            print "User " + file_user[0] + " needs to be added"
+            adding_needed["users"].append(file_user)
+
+    for file_role in files_content["roles"]:
+        result = check_role_value(file_role, db_content["roles"])
+        if result == "update":
+            if file_role[2] == "True":
+                file_role[2] = 1
+            if file_role[2] == "False":
+                file_role[2] = 0
+            update_needed["roles"].append(file_role)
+        elif result == "add":
+            print "Role " + file_role[0] + " needs to be added"
+            if file_role[2] == "True":
+                file_role[2] = 1
+            if file_role[2] == "False":
+                file_role[2] = 0
+            adding_needed["roles"].append(file_role)
+            if file_role[2] == 1:
+                adding_needed["role_permissions"].append([file_role[0],"am/users/keys","POST"])
+                adding_needed["role_permissions"].append([file_role[0],"am/users/keys","DELETE"])
+                print "am/users/keys permissions also needs to be added for role " + file_role[0]
+        else:
+            print "Role " + file_role[0] + " is ok"
+
+    for file_permission in files_content["permissions"]:
+        result = check_permission_value(file_permission,db_content["permissions"])
+        if result == "update":
+            print "Permission " + file_permission[0] + ":" + file_permission[1] + " needs update due to changed description"
+            update_needed["permissions"].append(file_permission)
+        elif result == "add":
+            print "Permission " + file_permission[0] + ":" + file_permission[1] + " needs to be added"
+            adding_needed["permissions"].append(file_permission)
+        else:
+            print "Permission " + file_permission[0] + ":" + file_permission[1] + " is ok"
+
+    for file_user_role in files_content["user_roles"]:
+        if not check_user_role_value(file_user_role, db_content["user_roles"]):
+            adding_needed["user_roles"].append(file_user_role)
+
+    for file_role_permission in files_content["role_permissions"]:
+        if not check_role_permission_value(file_role_permission, db_content["role_permissions"]):
+            adding_needed["role_permissions"].append(file_role_permission)
+
+    return (update_needed, adding_needed)
+
+
+def check_user_value(file_content, db_content):
+    for db_user in db_content:
+        if file_content[0] == db_user["name"]:
+            return True
+    return False
+
+
+def check_permission_value(file_content, db_content):
+    for db_permission in db_content:
+        if file_content[0] == db_permission["path"] and file_content[1] == db_permission["op"]:
+            if file_content[2] == db_permission["desc"]:
+                return "ok"
+            else:
+                return "update"
+    return "add"
+
+
+def check_role_permission_value(file_content, db_content):
+    for db_role_permission in db_content:
+        if file_content[0] == db_role_permission["name"] and file_content[1] == db_role_permission["path"] and file_content[2] == db_role_permission["op"]:
+            print "Role_permission " + file_content[0] + ":" + file_content[1] + ":" + file_content[2] + " is ok"
+            return True
+    print "Role_permission " + file_content[0] + ":" + file_content[1] + ":" + file_content[2] + " needs to be added"
+    return False
+
+
+def check_user_role_value(file_content, db_content):
+    for db_user_role in db_content:
+        if file_content[0] == db_user_role["user_name"] and file_content[1] == db_user_role["role_name"]:
+            print "User_role " + file_content[0] + ":" + file_content[1] + " is ok"
+            return True
+    print "User_role " + file_content[0] + ":" + file_content[1] + " needs to be added"
+    return False
+
+
+def check_role_value(file_content, db_content):
+    for db_role in db_content:
+        if file_content[0] == db_role["name"]:
+            if file_content[1] != db_role["desc"]:
+                print "Role " + file_content[0] + " needs update due to changed description"
+                return "update"
+            if file_content[2] != str(db_role["is_chroot"]):
+                print "Role " + file_content[0] + " needs update due to changed is_chroot"
+                return "update"
+            return "ok"
+    return "add"
+
+
+def update_tables(db, update_needed):
+    try:
+        for row in update_needed["roles"]:
+            db.set_role_param(row[0],row[1],row[2])
+            print "Role {} updated".format(row[0])
+        for row in update_needed["permissions"]:
+            db.update_resource(row[0],row[1],row[2])
+            print "Permission {0}:{1} updated".format(row[0], row[1])
+    except Exception as ex:
+        print ex
+        return False
+    return True
+
+
+def add_into_tables(db, adding_needed, config):
+    try:
+        keystone = make_keystone_auth(config)
+        for row in adding_needed["users"]:
+            uuid = get_resource_id(keystone, "users", row[0])
+            create_db_user(db, uuid, row[0])
+        for row in adding_needed["roles"]:
+            try:
+                role_id = keystone.roles.create(row[0])
+                print "Role {} created in Keystone".format(row[0])
+            except Conflict as ex:
+                print "Role {} already in Keystone".format(row[0])
+            db.create_role(row[0],row[1],row[2])
+            print "Role {} created in DB".format(row[0])
+        for row in adding_needed["permissions"]:
+            db.create_resource(row[0],row[1],row[2])
+            print "Permission {} created in DB".format(row[0])
+        for row in adding_needed["user_roles"]:
+            try:
+                project_id = get_resource_id(keystone, "projects", "{{ am_project_name }}")
+                role_id = get_resource_id(keystone, "roles", row[1])
+                uuid = db.get_user_uuid(row[0])
+                if row[1] == "infrastructure_admin":
+                    admin_project_id = get_resource_id(keystone, "projects", "admin")
+                    admin_role_id = get_resource_id(keystone, "roles", "admin")
+                    heat_role_id = get_resource_id(keystone, "roles", "heat_stack_owner")
+                    keystone.roles.grant(admin_role_id, user=uuid, project=admin_project_id)
+                    keystone.roles.grant(heat_role_id, user=uuid, project=admin_project_id)
+                keystone.roles.grant(role_id, user=uuid, project=project_id)
+                print "Role {} added to user {} in Keystone".format(row[1], row[0])
+            except Conflict as ex:
+                print "Role {} already at user {} in Keystone".format(row[1], row[0])
+            db.add_user_role(uuid, row[1])
+            print "Role {0} added to user {1} in DB".format(row[1], row[0])
+        for row in adding_needed["role_permissions"]:
+            db.add_resource_to_role(row[0], row[1], row[2])
+            print "Permission {0}:{1} added to role {2} in DB".format(row[1], row[2], row[0])
+    except Exception as ex:
+        print ex
+        print type(ex)
+        return False
+    return True
+
+
+def create_db_user(db, uuid, name):
+    if name == "{{ infrastructure_admin_user_name }}" or name == "admin":
+        db.create_user(uuid, name)
+    else:
+        db.create_user(uuid, name, service=True)
+    print "User {} created in DB".format(name)
+
+
+def get_resource_id(keystone, resource_type, resource_name):
+    res_type = getattr(keystone,resource_type)
+    resource = utils.find_resource(res_type, resource_name)
+    return resource.id
+
+
+def make_keystone_auth(config):
+    auth = v3.Password(
+                       auth_url="{{ keystone_service_internalurl }}",
+                       username="{{ keystone_admin_user_name }}",
+                       password="{{ keystone_auth_admin_password }}",
+                       project_name="{{ keystone_admin_tenant_name }}",
+                       project_domain_id="{{ am_project_domain }}",
+                       user_domain_id="{{ am_project_domain }}")
+    sess = session.Session(auth=auth)
+    keystone = client.Client(session=sess)
+    print "+++ Keystone authentication OK"
+    return keystone
+
+
+def main():
+    config = get_config()
+    logger = set_logger()
+    logger.info("logger set")
+    db = AMDatabase(db_name=config["DB"]["name"], db_addr=config["DB"]["addr"],
+                     db_port=int(config["DB"]["port"]), db_user=config["DB"]["user"],
+                     db_pwd=config["DB"]["pwd"], logger=logger, management_mode=True)
+    db.connect()
+    thime = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
+    print "*** Start time " + thime + " ***"
+    print "+++ Connection to database successful"
+    db_content = get_db_content(db)
+    print "+++ DB dump acquired"
+    files_content = read_files()
+    print "+++ Value files read"
+    update_needed, adding_needed = compare_contents(db_content, files_content)
+    print "+++ Comparation done"
+    result = update_tables(db, update_needed)
+    if result:
+        print "+++ Updating tables completed"
+    else:
+        print "--- Problem during updating tables"
+    result = add_into_tables(db, adding_needed, config)
+    if result:
+        print "+++ Adding to tables completed"
+    else:
+        print "--- Problem during table additions"
+    db.close()
+    print "+++ Aaand done"
+    thime = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
+    print "*** End time " + thime + " ***"
+    close_logger_handlers(logger)
+
+
+if __name__ == '__main__':
+    main()

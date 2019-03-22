@@ -1,0 +1,57 @@
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+- name: "create or delete linux user"
+  user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default('') }}"
+    remove: "{{ item.remove | default('yes') }}"
+    force: "{{ item.remove | default('yes') }}"
+    state: "{{ item.state | default('absent') }}"
+  with_items: "{{ linuxuser | default([]) }}"
+
+- name: "remove the old public ssh key"
+  file:
+    path: /home/{{ item.name }}/.ssh/{{ item.name }}
+    state: absent
+  with_items: "{{ linuxuser | default([]) }}"
+
+- name: "Create the user .ssh directory"
+  when: item.state == 'present'
+  file:
+    path: /home/{{ item.name }}/.ssh
+    state: directory
+    owner: "{{ item.name }}"
+    group: "{{ item.name }}"
+    mode: 0700
+  with_items: "{{ linuxuser | default([]) }}"
+
+- name: "add a new public ssh key"
+  when: item.state == 'present' and item.public_key != ""
+  lineinfile:
+    path: /home/{{ item.name }}/.ssh/{{ item.name }}
+    create: yes
+    regexp: '.*'
+    state: "{{ item.state | default('absent') }}"
+    line: "{{ item.public_key | default('') }}"
+    group: "{{ item.name }}"
+    owner: "{{ item.name }}"
+    mode: 0400
+  with_items: "{{ linuxuser | default([]) }}"
+
+- name: Locking and Unlocking the user
+  when: item.state == 'present' and item.password != ""
+  command: sudo passwd "{{ item.name }}" "{{ item.lock_state }}"
+  with_items: "{{ linuxuser | default([]) }}"

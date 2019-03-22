@@ -1,0 +1,104 @@
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Replace audit rules from template
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: 0700
+  with_items:
+    - {src: '10-base-config.rules.j2', dest: '/etc/audit/rules.d/10-base-config.rules'}
+    - {src: '11-loginuid.rules.j2', dest: '/etc/audit/rules.d/11-loginuid.rules'}
+    - {src: '12-filter-users.rules.j2', dest: '/etc/audit/rules.d/12-filter-users.rules'}
+    - {src: '30-stig.rules.j2', dest: '/etc/audit/rules.d/30-stig.rules'}
+    - {src: '31-privileged-gen.rules.j2', dest: '/etc/audit/rules.d/31-privileged-gen.rules'}
+    - {src: '32-power-abuse.rules.j2', dest: '/etc/audit/rules.d/32-power-abuse.rules'}
+    - {src: '33-avoid-flood.rules.j2', dest: '/etc/audit/rules.d/33-avoid-flood.rules'}
+    - {src: '34-failed-actions.rules.j2', dest: '/etc/audit/rules.d/34-failed-actions.rules'}
+    - {src: '35-umount.rules.j2', dest: '/etc/audit/rules.d/35-umount.rules'}
+    - {src: '36-resource-management.rules.j2', dest: '/etc/audit/rules.d/36-resource-management.rules'}
+    - {src: '37-linux-capabilities.rules.j2', dest: '/etc/audit/rules.d/37-linux-capabilities.rules'}
+    - {src: '41-containers.rules.j2', dest: '/etc/audit/rules.d/41-containers.rules'}
+    - {src: '42-injection.rules.j2', dest: '/etc/audit/rules.d/42-injection.rules'}
+    - {src: '43-module-load.rules.j2', dest: '/etc/audit/rules.d/43-module-load.rules'}
+    - {src: '44-certificates.rules.j2', dest: '/etc/audit/rules.d/44-certificates.rules'}
+    - {src: '50-file-changes.rules.j2', dest: '/etc/audit/rules.d/50-file-changes.rules'}
+    - {src: '51-messaging.rules.j2', dest: '/etc/audit/rules.d/51-messaging.rules'}
+    - {src: '52-sandbox.rules.j2', dest: '/etc/audit/rules.d/52-sandbox.rules'}
+    - {src: '53-kernel-parameters.rules.j2', dest: '/etc/audit/rules.d/53-kernel-parameters.rules'}
+    - {src: '99-finalize.rules.j2', dest: '/etc/audit/rules.d/99-finalize.rules'}
+
+- name: Delete original audit rules
+  file:
+    state: absent
+    path: "/etc/audit/rules.d/audit.rules"
+
+- name: Ask the audit log disc size
+  shell: df -BM --output=size,target | grep audit | awk '{print $1}' | tr -d 'M'
+  register: disc_size
+
+- name: Set the num_logs variable default value's
+  set_fact:
+    num_logs: "{{  ((disc_size.stdout|int *0.8)/100)|int  }}"
+    log_file_size: 100
+
+- name: Setting the log_file_size if the audit disk size is huge.
+  when: num_logs|int > 999
+  set_fact:
+    num_logs: 999
+    log_file_size: "{{ ((disc_size.stdout|int *0.8)/999)|int  }}"
+
+- name: Change auditd config
+  lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '{{ item.regexp }}'
+    line: '{{ item.line }}'
+  with_items:
+    - regexp: "^[ #]*num_logs"
+      line: "num_logs = {{ num_logs }}"
+    - regexp: "^[ #]*max_log_file "
+      line: "max_log_file = {{ log_file_size }}"
+    - regexp: "^[ #]*max_log_file_action"
+      line: "max_log_file_action = {{ log_file_action }}"
+    - regexp: "^[ #]*disk_full_action"
+      line: "disk_full_action = {{ disk_full_action }}"
+    - regexp: "^[ #]*space_left "
+      line: "space_left = {{ space_left_size }}"
+    - regexp: "^[ #]*space_left_action"
+      line: "space_left_action = {{ space_left_action }}"
+    - regexp: "^[ #]*admin_space_left_action"
+      line: "admin_space_left_action = {{ admin_space_left_action }}"
+    - regexp: "^[ #]*flush"
+      line: "flush = {{ flush }}"
+    - regexp: "^[ #]*disk_error_action"
+      line: "disk_error_action = {{ disk_error_action }}"
+    - regexp: "^[ #]*admin_space_left "
+      line: "admin_space_left = {{ admin_space_left }}"
+
+- name: Restart Auditd service
+  command: service auditd restart
+
+- name: "Add the pam_tally2.so module to the PAM sshd conf 1."
+  lineinfile:
+    path: /etc/pam.d/sshd
+    insertafter: '^auth[\s]*required[\s]*pam_sepermit.so'
+    line: 'auth       required     pam_tally2.so deny={{ host_os.failed_login_attempts | default(5) }} onerr=fail unlock_time={{ host_os.lockout_time | default(300) }}'
+
+- name: "Add the pam_tally2.so module to the PAM sshd conf 2."
+  lineinfile:
+    path: /etc/pam.d/sshd
+    insertafter: '^account[\s]*required[\s]*pam_nologin.so'
+    line: 'account    required     pam_tally2.so'

@@ -1,0 +1,27 @@
+#
+# Ansible managed
+#
+# This is the runtime configuration for log forwarding to external server.
+# If a configuration is active, the rsyslog-master instance will forward
+# logs to the configured external server.
+#
+# Last written: {{ lookup('pipe','date --rfc-3339=seconds') }}
+#
+{% if log_forwarding is defined %}
+template(name="RSYSLOG_SyslogProtocol23Format_with_cloudname" type="string"
+     string="<%PRI%>1 %TIMESTAMP:::date-rfc3339% %HOSTNAME%.{{ name }} %APP-NAME% %PROCID% %MSGID% %STRUCTURED-DATA% %msg%\n")
+
+{% if log_forwarding['tls'] == "on" %}
+$DefaultNetstreamDriver gtls
+$ActionSendStreamDriverMode 1
+$ActionSendStreamDriverAuthMode anon
+$DefaultNetstreamDriverCAFile /dev/null
+
+*.* @@(o)[{{ log_forwarding['ip_address'] }}]:{{ log_forwarding['port'] }}; RSYSLOG_SyslogProtocol23Format_with_cloudname
+{% else %}
+*.* action(type="omfwd" target="{{ log_forwarding['ip_address'] }}" port="{{ log_forwarding['port'] }}" protocol="{{ log_forwarding['protocol'] }}" template="RSYSLOG_SyslogProtocol23Format_with_cloudname")
+{% endif %}
+{% else %}
+# No active configuration
+#
+{% endif %}

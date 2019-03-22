@@ -1,0 +1,47 @@
+# cmframework.requires:baremetal-install.yml,baremetal-interface-config.yml,performance-kernel-cmdline-set.yml,ntp-config.yml
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- hosts: openstack_nodes
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  roles:
+    - role: cleanup_disks
+      vars:
+        disks: "{{ devices }}"
+      when:
+        - devices is defined
+        - one_controller_node_config | bool
+
+- include: single_node_partitions.yml
+  when:
+    - one_controller_node_config | bool
+    - lvm_configured | default(False)
+
+- include: single_node_volume_groups.yml
+  when:
+    - one_controller_node_config | bool
+    - lvm_configured | default(False)
+
+- include: glance-lvm.yml
+  vars:
+    all_disk_size_for_volume_group_vg: "1"
+  when:
+    - one_controller_node_config | bool
+    - lvm_configured | default(False)
+    - rootdisk_vg_percentage != all_disk_size_for_volume_group_vg

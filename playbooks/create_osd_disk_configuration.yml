@@ -1,0 +1,71 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: create osd disk configuration
+  hosts: osds
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  tasks:
+
+  - name: get the ceph osd ids
+    shell: lsblk -r | grep ceph- | cut -d '-' -f2
+    register: ceph_osd_ids
+
+  - name: get the devices
+    shell: for part in $(lsblk -r | grep  ceph- | awk -F[^A-Za-z][0-9*] '{print $1}');do find -L /sys/block -maxdepth 2 -name $part|cut -d'/' -f4;done
+    register: osd_devices
+
+  - name: get the by-path disks
+    shell: file /dev/disk/by-path/* | grep -w {{ item }} | head -n 1 | awk '{print $1}' | sed 's/.$//'
+    with_items: "{{ osd_devices.stdout_lines }}"
+    register: by_path_tmp
+
+  - name: get the disk size
+    shell: lsblk -r | grep -w {{ item }} | awk '{print $4}'
+    with_items: "{{ osd_devices.stdout_lines }}"
+    register: disk_size_tmp
+
+  - name: initialize list variables
+    set_fact:
+      by_path: []
+      disk_size: []
+      disk_config: []
+      disk_config1: {}
+
+  - name: set by_path variable
+    set_fact:
+      by_path: "{{ by_path }} + {{ item.stdout_lines }} "
+    with_items: "{{ by_path_tmp.results }}"
+
+  - name: set disk_size variable
+    set_fact:
+      disk_size: "{{ disk_size }} + {{ item.stdout_lines }} "
+    with_items: "{{ disk_size_tmp.results }}"
+
+  - name: populate disk_config
+    set_fact:
+      disk_config: "{{ disk_config +  [ {'osd_id': item.0, 'device': item.1, 'by-path': item.2,  'size': item.3, 'service_name': 'ceph-osd-disk-' + item.4 | string, 'systemd': 'ceph-osd@' + item.0 | string + '.service'} ] }}"
+    with_together:
+      - "{{ ceph_osd_ids.stdout_lines }}"
+      - "{{ osd_devices.stdout_lines }}"
+      - "{{ by_path }}"
+      - "{{ disk_size }}"
+      - "{{ by_path_disks['osd_disks_ids'] }}"
+
+  - name: dump disk_config variable
+    action: template src=osd_disk_configuration.j2 dest=/tmp/{{ hostname }}-disks.json  mode=644

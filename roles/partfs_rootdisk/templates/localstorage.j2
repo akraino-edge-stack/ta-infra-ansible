@@ -1,0 +1,55 @@
+{%- set node_service_profiles = hosts[inventory_hostname]['service_profiles'] %}
+{%- if (openstack is defined) and (openstack != '') -%}
+  {%- if (('management' in node_service_profiles) and (ceph_configured | default(False))) -%}
+    {%- set _ = node_service_profiles.append("cephcontroller") -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if node_service_profiles|length > 1 %}
+
+  {%- set device_mapping = {} %}
+  {% if device_mapping.update(localstorage[node_service_profiles[0]]) %}{%- endif %}
+
+  {%- macro update_bigger_hash(hash) -%}
+    {%- set vol_names1 = device_mapping.keys()|list %}
+    {%- set vol_names2 = hash.keys()| list %}
+    {%- set vol_names =  vol_names1 + vol_names2| unique|list%}
+
+    {%- for vol_name in vol_names %}
+      {% if vol_name in device_mapping.keys() and vol_name not in hash.keys() %}
+        {% if device_mapping.update({ vol_name:  device_mapping[vol_name]}) %}{%- endif %}
+      {% elif vol_name not in device_mapping.keys() and vol_name in hash.keys() %}
+        {% if device_mapping.update({ vol_name: hash[vol_name]} ) %}{%- endif %}
+      {%- elif device_mapping[vol_name]["lvm_size"]|replace("%VG", "")|int > hash[vol_name]["lvm_size"]|replace("%VG", "")|int %}
+        {% if device_mapping.update({ vol_name: device_mapping[vol_name]}) %}{%- endif %}
+      {%- else %}
+        {% if device_mapping.update({ vol_name: hash[vol_name]} ) %}{%- endif %}
+      {%- endif %}
+    {%- endfor -%}
+  {%- endmacro -%}
+
+  {%- for index in range(1, node_service_profiles | length) -%}
+    {%-if update_bigger_hash(localstorage[node_service_profiles[index]]) -%}{%- endif %}
+  {%- endfor -%}
+
+{%- else %}
+  {%- set device_mapping = localstorage[node_service_profiles[0]] %}
+{%- endif %}
+
+{% set allocated_vg = device_mapping.values() | map(attribute="lvm_size") | map("replace", "%VG", "") | map("int") | sum %}
+{% set variable_found = device_mapping.values() | selectattr("lvm_size", "search", "variable") | list %}
+{% if variable_found %}
+  {% set variable_size = (100-allocated_vg) | string + '%VG'%}
+  {% set _ = variable_found[0].update({'lvm_size': variable_size}) %}
+{% endif %}
+
+{
+"device_mapping": [
+{%- for vol_value in device_mapping.values() %}
+   {
+   {%- for vol_details_key,vol_details_value in vol_value.iteritems()  %}
+   "{{vol_details_key}}":"{{vol_details_value}}"{% if not loop.last %},{% endif %}
+   {%- endfor -%}
+   }{% if not loop.last %},{% endif %}
+{%- endfor -%}
+]
+}

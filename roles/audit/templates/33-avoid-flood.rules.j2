@@ -1,0 +1,4 @@
+## The purpose of this rule is to exclude reports that flooding normally the audit
+-a never,exit -F arch=b32 -S setsockopt
+-a never,exit -F arch=b64 -S setsockopt
+-a always,exclude -F msgtype=netfilter_cfg

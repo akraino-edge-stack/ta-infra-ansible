@@ -1,0 +1,27 @@
+---
+# Copyright (C) 2019 Nokia
+
+- name: Set requested CPUs.
+  set_fact:
+    cpu_request: "{% if cpu_set.opt is defined %}{{ perf_profile[cpu_set.opt] }}{% else %}{{ cpu_set.request }}{% endif %}"
+
+- name: Allocate CPU set.
+  set_fact:
+    allocated_cpu_set: "{{ ncir_cpu_topology | cpu_topology_alloc(cpu_request, cpu_set.where) }}"
+
+- name: Append allocated CPU set.
+  set_fact:
+    combined_cpu_set: "{{ allocated_cpu_set | union(ncir_cpu_sets[cpu_set.name] | default([])) | sort }}"
+
+- name: Make CPU set.
+  set_fact:
+    ncir_cpu_sets: "{{ ncir_cpu_sets | combine({ cpu_set.name: combined_cpu_set }) }}"
+    ncir_cpu_topology: "{{ ncir_cpu_topology | cpu_topology_trim(cpu_request, cpu_set.where) }}"
+
+- name: Show created CPU sets.
+  debug:
+    var: ncir_cpu_sets
+
+- name: Show CPU topology after sets creation.
+  debug:
+    var: ncir_cpu_topology

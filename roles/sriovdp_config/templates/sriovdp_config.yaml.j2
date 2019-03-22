@@ -1,0 +1,15 @@
+resourceList:
+{% for nprof in network_profiles %}
+{%   if nprof in hosts[ansible_hostname].network_profiles %}
+{%     if network_profiles[nprof].sriov_provider_networks is defined %}
+{%       for pool in network_profiles[nprof].sriov_provider_networks %}
+{%         for iface in network_profiles[nprof].sriov_provider_networks[pool].interfaces %}
+- resourceName: "sriov_{{ iface }}"
+  rootDevices: [ "{{ ifacepcimap[iface] }}" ]
+  sriovMode: true
+  deviceType: netdevice
+{%         endfor %}
+{%       endfor %}
+{%     endif %}
+{%   endif %}
+{% endfor %}

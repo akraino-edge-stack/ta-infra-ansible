@@ -1,0 +1,14 @@
+[Unit]
+Description=keepalived monitor 
+After=network.target
+After=keepalivedmonitoragent.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/keepalived -n -l -f /etc/keepalivedmonitor/keepalivedmonitor.conf
+Restart=always
+RestartSec=3
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

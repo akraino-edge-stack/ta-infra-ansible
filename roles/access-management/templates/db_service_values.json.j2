@@ -1,0 +1,17 @@
+{
+ "users": [
+{% for i in keystone_uuids.results %}
+  ["{{ i.item }}",""],
+{% endfor %}
+  ["{{ infrastructure_admin_user_name }}",""]
+ ],
+ "roles": [
+  ["basic_member","Basic Member","False"]
+ ],
+ "permissions": [
+ ],
+ "user_roles": [
+ ],
+ "role_permissions": [
+ ]
+}

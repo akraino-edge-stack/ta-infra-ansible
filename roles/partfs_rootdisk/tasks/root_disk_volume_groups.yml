@@ -1,0 +1,140 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: check if this is partfs_rootdisk re-run
+  stat:
+    path: /etc/partfs_rootdisk_created
+  ignore_errors: yes
+  register: rerun_case
+
+- name: Create /tmp/<node_name>localstorage.json file
+  template:
+    src: "localstorage.j2"
+    dest: "/tmp/{{inventory_hostname}}_localstorage.json"
+    owner: "root"
+    mode: "0644"
+  delegate_to: "{{installation_controller}}"
+
+- name: Load variables from the json file
+  include_vars: "/tmp/{{inventory_hostname}}_localstorage.json"
+
+- name: Remove /tmp/<node_name>localstorage.json file
+  file:
+    path: "/tmp/{{inventory_hostname}}_localstorage.json"
+    state: "absent"
+  delegate_to: "{{installation_controller}}"
+
+- name: Create Partition for LVMs
+  parted:
+    device: "{{root_disk}}"
+    number: "{{phy_disk_part_number}}"
+    flags: [ lvm ]
+    state: present
+    part_start: "{{part_start}}"
+    part_end: "{{part_end}}"
+  when:
+    - create_disk_part | bool
+    - rootdisk_vg_percentage != all_disk_size_for_volume_group_vg
+
+- name: Create Partition for LVMs
+  parted:
+    device: "{{root_disk}}"
+    number: "{{phy_disk_part_number}}"
+    flags: [ lvm ]
+    state: present
+    part_start: "{{part_start}}"
+  when:
+    - create_disk_part | bool
+    - rootdisk_vg_percentage == all_disk_size_for_volume_group_vg
+
+- set_fact:
+    vg_disk: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{phy_disk_part_number}}{% else %}{{root_disk}}-part{{phy_disk_part_number}}{% endif %}"
+
+- debug:
+    msg: "{{vg_disk}}"
+
+- name: Create PV VG
+  lvg:
+    vg: VG
+    pvs: "{{vg_disk}}"
+
+- name: Delete old LVMs if not mounted already
+  script: "{{role_path}}/scripts/old_vol_rm.sh"
+  args:
+    creates: /etc/partfs_rootdisk_created
+
+- name: Creating LVM
+  lvol:
+    vg: VG
+    lv: "{{vol['lvm_name']}}"
+    size: "{{vol['lvm_size']}}"
+  with_items: "{{device_mapping|sort(attribute='mount_point')}}"
+  loop_control:
+    loop_var: vol
+  when:
+    - rerun_case.stat.exists is undefined or rerun_case.stat.exists == false
+
+- name: Create XFS filesystem on LVM
+  filesystem:
+    fstype: xfs
+    dev: "/dev/mapper/VG-{{vol['lvm_name']}}"
+  with_items: "{{device_mapping|sort(attribute='mount_point')}}"
+  loop_control:
+    loop_var: vol
+
+- name: Create fstab entry.
+  mount:
+    path: "{{vol['mount_point']}}"
+    src: "/dev/mapper/VG-{{vol['lvm_name']}}"
+    fstype: xfs
+    opts: "{{vol['mount_opts']}}"
+    state: present
+  with_items: "{{device_mapping|sort(attribute='mount_point')}}"
+  loop_control:
+    loop_var: vol
+
+# Run below script to do the following tasks
+#-  Stop existing services
+#-  Move the current files to a tmp location
+#-  mount LVM on mount dir
+#-  restore old files
+#-  Start old services
+#- It creates logs in the target node at /tmp/vol_mgmt_logfile
+- name: Running a script to remount volume on target dir
+  script: "{{role_path}}/scripts/vol_mgmt.sh {{vol['mount_point']}} /dev/mapper/VG-{{vol['lvm_name']}}"
+  with_items: "{{device_mapping|sort(attribute='mount_point')}}"
+  loop_control:
+    loop_var: vol
+  args:
+    creates: /etc/partfs_rootdisk_created
+
+- name: Check if Root partition can grow
+  shell: "growpart --dry-run $(readlink -f {{root_disk}}) 1"
+  register: rootpart
+  ignore_errors: yes
+  args:
+    creates: /etc/partfs_rootdisk_created
+
+- name: Grow Root partition
+  shell: "growpart $(readlink -f {{root_disk}}) 1"
+  when: rootpart.rc == 0
+  args:
+    creates: /etc/partfs_rootdisk_created
+
+- name: Grow xfs filesystem on Root partition
+  command: "xfs_growfs /"
+  args:
+    creates: /etc/partfs_rootdisk_created

@@ -1,0 +1,65 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- hosts: management
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  tasks:
+    # To avoid this warning in lvs -command: WARNING: Not using lvmetad because config setting use_lvmetad=0.
+  - name: patch use_lvmetad parameter in lvm.conf
+    lineinfile: path=/etc/ansible/roles/os_cinder/templates/lvm.conf.j2  regexp='^\s*use_lvmetad ='   line='    use_lvmetad = 1'
+
+  - name: instance disks disk layout
+    debug:
+      msg: "Controller instance devices: {{ instance_disks }}"
+    when: instance_disks is defined
+
+  - name: make partition table for nova in controller
+    parted: device={{ item }}  number=1  label=gpt  state=present
+    with_items: "{{ instance_disks }}"
+    when: instance_disks is defined
+
+  - name: Inform the OS of partition table changes
+    shell: "/sbin/partprobe {{ item }}"
+    with_items: "{{ instance_disks }}"
+    when: instance_disks is defined
+
+  - name: set Linux LVM type to partition
+    shell: "[ -b {{ item }} ] | parted {{ item }} set 1 lvm on"
+    with_items: "{{ instance_disks }}"
+    when: instance_disks is defined
+
+  - name: cinder disk layout
+    debug:
+      msg: "Controller cinder devices: {{ devices }}"
+    when: devices is defined
+
+  - name: make partition table for cinder in controller
+    parted: device={{ item }}  number=1  label=gpt  state=present
+    with_items: "{{ devices }}"
+    when: devices is defined
+
+  - name: Inform the OS of partition table changes
+    shell: "/sbin/partprobe {{ item }}"
+    with_items: "{{ devices }}"
+    when: devices is defined
+
+  - name: set Linux LVM type to partition
+    shell: "[ -b {{ item }} ] | parted {{ item }} set 1 lvm on"
+    with_items: "{{ devices }}"
+    when: devices is defined

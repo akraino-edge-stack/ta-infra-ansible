@@ -1,0 +1,20 @@
+## Optional - log container creation 
+## Use these rules if you want to log container events
+## watch for container creation
+-a always,exit -F arch=b32 -S clone -F a0&0x7C020000 -F key=container-create
+-a always,exit -F arch=b64 -S clone -F a0&0x7C020000 -F key=container-create
+-w /etc/docker -p wa -k docker
+-w /etc/sysconfig/docker-registries -p wa -k docker
+-w /etc/sysconfig/docker-storage -p wa -k docker
+-w /etc/sysconfig/docker-proxy -p wa -k docker
+-w /usr/bin/docker -k docker
+-w /usr/lib/systemd/system/docker.service -p wa -k docker
+-w /var/run/docker.sock -p wa -k docker
+-w /usr/lib/systemd/system/kubelet.service -p wa -k kubelet
+-w /etc/kubernetes/ -p wa -k kubelet
+-w /var/log/audit/kube_apiserver/ -k container-audit
+#-w /var/lib/docker/manifests -p wa -k docker
+
+## watch for containers that may change their configuration
+-a always,exit -F arch=b32 -S unshare,setns -F key=container-config
+-a always,exit -F arch=b64 -S unshare,setns -F key=container-config

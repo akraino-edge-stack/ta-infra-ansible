@@ -1,0 +1,43 @@
+#!/bin/sh
+
+result=$(\
+curl -i \
+  -H "Content-Type: application/json" \
+  -d '
+{ "auth": {
+    "identity": {
+      "methods": ["password"],
+      "password": {
+        "user": {
+          "name": "{{ infrastructure_admin_user_name }}",
+          "domain": { "id": "{{ am_project_domain }}" },
+          "password": "{{ infrastructure_admin_password }}"
+        }
+      }
+    },
+    "scope": {
+      "project": {
+        "name": "{{ am_project_name }}",
+        "domain": { "id": "{{ am_project_domain }}" }
+      }
+    }
+  }
+}' \
+  -X POST "{{ keystone_service_internalurl }}/auth/tokens" |grep X-Subject-Token | cut -c 17-); echo $result
+
+{% for i in keystone_uuids.results %}
+curl -i \
+  -H "X-Auth-Token:${result::-1}" \
+  -H "Content-Type: application/json" \
+  -d '
+{
+    "user": {
+        "options": {
+            "ignore_change_password_upon_first_use": true,
+            "ignore_lockout_failure_attempts": true,
+            "ignore_password_expiry": true
+        }
+    }
+}' \
+  -X PATCH "{{ keystone_service_internalurl }}/users/{{ i.ansible_facts.keystone_facts.id }}";echo
+{% endfor %}

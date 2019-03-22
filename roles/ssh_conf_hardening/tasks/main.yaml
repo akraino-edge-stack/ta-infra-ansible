@@ -1,0 +1,182 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Ssh protocol setting
+  ssh_conf:
+    regexp: '[\s]*Protocol'
+    values: "Protocol 2\n"
+
+- name: Disable ssh root login
+  ssh_conf:
+    regexp: '[\s]*PermitRootLogin [y|n]'
+    values: "PermitRootLogin no\n"
+
+- name: Listening address setting
+  ssh_conf:
+    regexp: '[\s]*ListenAddress'
+    values: "ListenAddress 0.0.0.0\n"
+
+- name: Disable the hostbasedauthentication
+  ssh_conf:
+    regexp: '[\s]*HostbasedAuthentication [y|n]'
+    values: "HostbasedAuthentication no\n"
+
+- name: Disable the passwordauthentication
+  ssh_conf:
+    regexp: '[\s]*PasswordAuthentication [y|n]'
+    values: "PasswordAuthentication yes\n"
+
+- name: Disable the empty password
+  ssh_conf:
+    regexp: '[\s]*PermitEmptyPasswords [y|n]'
+    values: "PermitEmptyPasswords no\n"
+
+- name: Ciphers setting
+  ssh_conf:
+    regexp: '[\s]*Ciphers'
+    values: "Ciphers aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com\n"
+
+- name: MACs setting
+  ssh_conf:
+    regexp: '[\s]*MACs'
+    values: "MACs hmac-sha2-256,hmac-sha2-512,hmac-ripemd160,hmac-ripemd160@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-ripemd160-etm@openssh.com,umac-64-etm@openssh.com,umac-128-etm@openssh.com\n"
+
+- name: Login Gracetime setting
+  ssh_conf:
+    regexp: '[\s]*LoginGraceTime'
+    values: "LoginGraceTime 60\n"
+
+- name: User Alive Interval setting
+  ssh_conf:
+    regexp: '[\s]*ClientAliveInterval'
+    values: "ClientAliveInterval 900\n"
+
+- name: Disable the X11forwarding
+  ssh_conf:
+    regexp: '[\s]*X11Forwarding [y|n]'
+    values: "X11Forwarding no\n"
+
+- name: Disable SSH agent forwarding
+  ssh_conf:
+    regexp: '[\s]*AllowAgentForwarding [y|n]'
+    values: "AllowAgentForwarding no\n"
+
+- name: Disable TCP forwarding
+  ssh_conf:
+    regexp: '[\s]*AllowTcpForwarding [y|n]'
+    values: "AllowTcpForwarding no\n"
+
+- name: Activate the strict mode
+  ssh_conf:
+    regexp: '[\s]*StrictModes [y|n]'
+    values: "StrictModes yes\n"
+
+- name: Port setting
+  ssh_conf:
+    regexp: '[\s]*Port'
+    values: "Port 22\n"
+
+- name: HostKeyAlgorithms setting
+  ssh_conf:
+    regexp: '[\s]*HostKeyAlgorithms'
+    values: "HostKeyAlgorithms ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-rsa,ssh-rsa-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,ssh-ed25519\n"
+
+- name: PubkeyAcceptedKeyTypes setting
+  ssh_conf:
+    regexp: '[\s]*PubkeyAcceptedKeyTypes'
+    values: "PubkeyAcceptedKeyTypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-rsa,ssh-rsa-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,ssh-ed25519\n"
+
+- name: KexAlgorithms
+  ssh_conf:
+    regexp: '[\s]*KexAlgorithms'
+    values: "KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256\n"
+
+- name: MaxAuthTries setting
+  ssh_conf:
+    regexp: '[\s]*MaxAuthTries'
+    values: "MaxAuthTries 6\n"
+
+- name: Banner creation
+  ssh_conf:
+    regexp: '[\s]*Banner'
+    values: "Banner /etc/banner\n"
+
+- name: "Enable the Ipv6"
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    insertafter: '^[\s]*ListenAddress 0.0.0.0'
+    line: 'ListenAddress ::'
+
+- name: "Disable Kerberos Authentication"
+  ssh_conf:
+    regexp: '[\s]*KerberosAuthentication'
+    values: "KerberosAuthentication no\n"
+
+- name: "Enable Use of Privilege Separation"
+  ssh_conf:
+    regexp: '[\s]*UsePrivilegeSeparation'
+    values: "UsePrivilegeSeparation sandbox\n"
+
+- name: "Disable Compression"
+  ssh_conf:
+    regexp: '[\s]*Compression'
+    values: "Compression no\n"
+
+- name: "Set SSH Client Alive Count"
+  ssh_conf:
+    regexp: '[\s]*ClientAliveCountMax'
+    values: "ClientAliveCountMax 0\n"
+
+- name: "Disable SSH Support for User Known Hosts"
+  ssh_conf:
+    regexp: '[\s]*IgnoreUserKnownHosts'
+    values: "IgnoreUserKnownHosts yes\n"
+
+- name: "Do Not Allow SSH Environment Options"
+  ssh_conf:
+    regexp: '[\s]*PermitUserEnvironment'
+    values: "PermitUserEnvironment no\n"
+
+- service:
+    name: sshd
+    state: restarted
+
+- name : create a banner file
+  lineinfile:
+    path: /etc/banner
+    create: yes
+    regexp: '^.*'
+    state: present
+    line: "This is a PRIVATE computer system. All unauthorized use or unauthorized access is prohibited according to local laws and may lead to prosecution. Your operations are logged."
+
+- name: "Set the maximum number of days a ssh password may be used."
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MAX_DAYS[\s]*[0-9]*$'
+    line: 'PASS_MAX_DAYS   90'
+
+- name: "Set the number of days warning given before a password expires."
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE[\s]*[0-9]*$'
+    line: 'PASS_WARN_AGE   5'
+
+- name: "Set the unique last password count."
+  lineinfile:
+    path: /etc/pam.d/system-auth-ac
+    regexp: '^password[\s]*sufficient.*pam_unix.so(.*)$'
+    line: 'password    sufficient    pam_unix.so\1 remember=12'
+    backrefs: yes

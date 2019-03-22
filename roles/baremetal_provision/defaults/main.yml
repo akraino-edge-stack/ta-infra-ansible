@@ -1,0 +1,33 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+## Verbosity Options
+debug: False
+
+net_conn_details: []
+baremetal_ironic_nodes_ids: []
+config_drive_templates:
+    - src: "meta_data.json.j2"
+      dest: "meta_data.json"
+      config_type: "json"
+    - src: "user_data.j2"
+      dest: "user_data"
+      config_type: "yaml"
+
+golden_image_http_port: 61400
+base_console_port: 61401
+base_vbmc_port: 61600

@@ -1,0 +1,102 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## General options
+debug: True
+
+## Tempest settings
+tempest_public_subnet_cidr: 172.29.248.0/22
+tempest_public_subnet_allocation_pools: "172.29.249.110-172.29.249.200"
+
+## Galera settings
+galera_innodb_buffer_pool_size: 256M
+galera_innodb_log_buffer_size: 32M
+galera_wsrep_provider_options:
+ - { option: "gcache.size", value: "32M" }
+
+## Neutron settings
+neutron_metadata_checksum_fix: True
+
+## Set workers for all services to optimise memory usage
+ceilometer_api_workers: 2
+ceilometer_collector_workers: 2
+ceilometer_notification_workers: 2
+cinder_osapi_volume_workers: 2
+glance_api_workers: 2
+glance_registry_workers: 2
+heat_api_workers: 2
+heat_engine_workers: 2
+horizon_wsgi_processes: 2
+horizon_wsgi_threads: 2
+keystone_wsgi_processes: 2
+neutron_api_workers: 2
+neutron_metadata_workers: 1
+neutron_rpc_workers: 1
+nova_conductor_workers: 2
+nova_metadata_workers: 2
+nova_osapi_compute_workers: 2
+nova_wsgi_processes: 2
+swift_account_server_workers: 2
+swift_container_server_workers: 2
+swift_object_server_workers: 2
+swift_proxy_server_workers: 2
+
+# NOTE: hpcloud-b4's eth0 uses 10.0.3.0/24, which overlaps with the
+#       lxc_net_address default
+# TODO: We'll need to implement a mechanism to determine valid lxc_net_address
+#       value which will not overlap with an IP already assigned to the host.
+lxc_net_address: 10.255.255.1
+lxc_net_netmask: 255.255.255.0
+lxc_net_dhcp_range: 10.255.255.2,10.255.255.253
+
+{% if repo_build_pip_extra_indexes is defined %}
+## Wheel mirrors for the repo_build to use
+repo_build_pip_extra_indexes:
+{{ repo_build_pip_extra_indexes | to_nice_yaml }}
+{% endif %}
+
+{% if uca_apt_repo_url is defined %}
+## Ubuntu Cloud Archive mirror to use
+uca_apt_repo_url: {{ uca_apt_repo_url }}
+{% endif %}
+
+{% if cache_timeout is defined %}
+## Package cache timeout
+cache_timeout: {{ cache_timeout }}
+{% endif %}
+
+{% if repo_build_git_cache is defined %}
+## Git cache to use for the repo build process
+repo_build_git_cache: {{ repo_build_git_cache }}
+{% endif %}
+
+# The container backing store is set to 'overlayfs' to speed up the
+# AIO build time.
+lxc_container_backing_store: "{{ (ansible_kernel | version_compare('3.18.0-0-generic', '<')) | ternary('dir', 'overlayfs') }}"
+
+## Enable LBaaSv2 in the AIO
+neutron_plugin_base:
+  - router
+  - metering
+  - neutron_lbaas.services.loadbalancer.plugin.LoadBalancerPluginv2
+
+## Always setup tempest, the resources for it, then execute tests
+tempest_install: yes
+tempest_run: yes
+
+{% if nodepool_dir.stat.exists %}
+# Disable chronyd in OpenStack CI
+security_rhel7_enable_chrony: no
+{% endif %}

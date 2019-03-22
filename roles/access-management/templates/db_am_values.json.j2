@@ -1,0 +1,71 @@
+{
+ "users": [
+  ["{{ infrastructure_admin_user_name }}",""]
+ ],
+ "roles": [
+  ["infrastructure_admin","Infrastructure Administrator","False"],
+  ["openstack_admin","Openstack Administrator","False"],
+  ["heat_stack_owner","Heat Stack Owner","False"],
+  ["linux_user","Linux User","False"]
+ ],
+ "permissions": [
+  ["am/users","POST","Creating new user in keystone"],
+  ["am/users","DELETE","Deleting one or more existing users"],
+  ["am/users","GET","Listing existing users"],
+  ["am/users/ownpasswords","POST","Changing the current user password"],
+  ["am/users/passwords","POST","changing a users password"],
+  ["am/users/parameters","POST","Setting user parameters"],
+  ["am/users/details","GET","Displaying the details of a user"],
+  ["am/users/owndetails","GET","Displaying the user's own details"],
+  ["am/users/roles","POST","Adding role for a user"],
+  ["am/users/roles","DELETE","Removing role from a user"],
+  ["am/users/locks","POST","Enabling a locked account"],
+  ["am/users/locks","DELETE","Enabling a locked account"],
+  ["am/users/keys","POST","Adding/updating key for one chroot"],
+  ["am/users/keys","DELETE","Removing key for the existing chroot"],
+  ["am/roles","POST","Creating a new role"],
+  ["am/roles","PUT","Modifying an existing role"],
+  ["am/roles","DELETE","Deleting an existing role"],
+  ["am/roles","GET","Listing existing roles"],
+  ["am/roles/details","GET","Displaying the details of a role"],
+  ["am/roles/users","GET","Listing the users of a role"],
+  ["am/roles/permissions","POST","Adding a new permission for a role"],
+  ["am/roles/permissions","DELETE","Removing a permission from a role"],
+  ["am/permissions","GET","Listing all the permissions & endpoints"],
+  ["am/permissions/details","GET","Listing a single resource & operations"]
+ ],
+ "user_roles": [
+  ["{{ keystone_admin_user_name }}","basic_member"],
+  ["{{ infrastructure_admin_user_name }}","infrastructure_admin"],
+  ["{{ infrastructure_admin_user_name }}","basic_member"]
+ ],
+ "role_permissions": [
+  ["infrastructure_admin","am/users","POST"],
+  ["infrastructure_admin","am/users","DELETE"],
+  ["infrastructure_admin","am/users","GET"],
+  ["infrastructure_admin","am/users/ownpasswords","POST"],
+  ["infrastructure_admin","am/users/passwords","POST"],
+  ["infrastructure_admin","am/users/parameters","POST"],
+  ["infrastructure_admin","am/users/details","GET"],
+  ["infrastructure_admin","am/users/roles","POST"],
+  ["infrastructure_admin","am/users/roles","DELETE"],
+  ["infrastructure_admin","am/users/locks","POST"],
+  ["infrastructure_admin","am/users/locks","DELETE"],
+  ["infrastructure_admin","am/users/keys","POST"],
+  ["infrastructure_admin","am/users/keys","DELETE"],
+  ["infrastructure_admin","am/roles","POST"],
+  ["infrastructure_admin","am/roles","PUT"],
+  ["infrastructure_admin","am/roles","DELETE"],
+  ["infrastructure_admin","am/roles","GET"],
+  ["infrastructure_admin","am/roles/details","GET"],
+  ["infrastructure_admin","am/roles/users","GET"],
+  ["infrastructure_admin","am/roles/permissions","POST"],
+  ["infrastructure_admin","am/roles/permissions","DELETE"],
+  ["infrastructure_admin","am/permissions","GET"],
+  ["infrastructure_admin","am/permissions/details","GET"],
+  ["basic_member","am/users/ownpasswords","POST"],
+  ["basic_member","am/users/owndetails","GET"],
+  ["linux_user","am/users/keys","POST"],
+  ["linux_user","am/users/keys","DELETE"]
+ ]
+}

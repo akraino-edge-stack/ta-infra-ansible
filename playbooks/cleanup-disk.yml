@@ -1,0 +1,45 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- hosts: storage
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  vars:
+    disks: "{{ devices }}"
+  tasks:
+  - include: remove_volume_groups.yml
+    when: devices is defined
+
+  - include: destroy_data_and_partitions.yml
+    when: devices is defined
+
+- hosts: compute
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+  vars:
+    disks: "{{ instance_disks }}"
+  tasks:
+  - include: remove_volume_groups.yml
+    when:
+    - instance_disks is defined
+
+  - include: destroy_data_and_partitions.yml
+    when:
+    - instance_disks is defined

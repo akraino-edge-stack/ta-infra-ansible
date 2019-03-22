@@ -1,0 +1,11 @@
+[Unit]
+Description=redis monitoring service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/monitoring/redismonitor.sh "{{ internal_lb_vip_address }}"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,48 @@
+---
+
+# Copyright 2019 Nokia
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- hosts: management
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: no
+
+  vars:
+    vg_name: nova
+    lv_name: glance
+    lv_percentage: 10
+    lv_fstype: ext4
+    lv_dev: /dev/{{ vg_name }}/{{ lv_name }}
+    lv_mnt_point: /var/lib/glance
+
+  tasks:
+  - name: Create {{ lv_name }} logical volume to {{ lv_percentage }}% of {{ vg_name }} VG
+    lvol:
+      vg: "{{ vg_name }}"
+      lv: "{{ lv_name }}"
+      size: "{{ lv_percentage  }}%VG"
+
+  - name: Make {{ lv_fstype }} fileystem on {{ lv_name }} logical volume
+    filesystem:
+      fstype: "{{ lv_fstype }}"
+      dev: "{{ lv_dev }}"
+
+  - name: Mount {{ lv_dev }} to {{ lv_mnt_point }}
+    mount:
+      path: "{{ lv_mnt_point }}"
+      src: "{{ lv_dev }}"
+      fstype: "{{ lv_fstype }}"
+      state: mounted

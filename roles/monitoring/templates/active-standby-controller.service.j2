@@ -1,0 +1,11 @@
+[Unit]
+Description=active standby controller
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/monitoring/active-standby-monitor.sh "{{ networking['vips']['infra_internal']['internal_vip'] }}"
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

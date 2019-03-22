@@ -1,0 +1,9 @@
+## messaging and messaging queues
+-a always,exit -F arch=b32 -S mq_open -F key=32bit_mq_open
+-a always,exit -F arch=b64 -S mq_open -F key=64bit_mq_open
+-a always,exit -F arch=b32 -S mq_unlink -F key=32bit_mq_unlink
+-a always,exit -F arch=b64 -S mq_unlink -F key=64bit_mq_unlink
+-a always,exit -F arch=b32 -S bpf -F key=32bit_bpf
+-a always,exit -F arch=b64 -S bpf -F key=64bit_bpf
+-a always,exit -F arch=b32 -S vmsplice -F key=32bit_vmsplice
+-a always,exit -F arch=b64 -S vmsplice -F key=64bit_vmsplice
