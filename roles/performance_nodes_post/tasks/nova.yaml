@@ -15,7 +15,7 @@
 # limitations under the License.
 
 - name: Set vcpu_pin_set
-  ini_file: dest=/etc/nova/nova.conf section=DEFAULT option=vcpu_pin_set value={{ ansible_local.ncir_cpu_allocation['vm']['list'] }} backup=no
+  ini_file: dest=/etc/nova/nova.conf section=DEFAULT option=vcpu_pin_set value={{ ansible_local.cloud_cpu_allocation['vm']['list'] }} backup=no
   register: nova1_result
 
 - name: Get performance profile configuration

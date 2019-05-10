@@ -16,6 +16,3 @@
   tags:
       - generate_log_forwarding_config
 
-- include: restart_centralized_instance.yml
-  tags:
-      - restart_centralized_instance

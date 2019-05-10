@@ -17,19 +17,19 @@
 
 - name: Prepare.
   set_fact:
-    ncir_cpu_remain: []
-    ncir_cpu_sets: {}
+    cloud_cpu_remain: []
+    cloud_cpu_sets: {}
 
 - name: Get CPU topology.
   get_cpu_topology:
-    var: ncir_cpu_topology
+    var: cloud_cpu_topology
 - debug:
-    var: ncir_cpu_topology
+    var: cloud_cpu_topology
 
 - name: Make default performance profile.
   set_fact:
     perf_profile: {
-      platform_cpus: "{{ ncir_cpu_topology | cpu_topology_defaults(hosts[hostname]['service_profiles'], ncir_default_platform_cpus, virtual_env, hosts | length < 2) }}"
+      platform_cpus: "{{ cloud_cpu_topology | cpu_topology_defaults(hosts[hostname]['service_profiles'], cloud_default_platform_cpus, virtual_env, hosts | length < 2) }}"
     }
 - debug:
     var: perf_profile
@@ -66,13 +66,13 @@
   loop_control:
     loop_var: cpu_set
   with_items:
-    - { 'name': 'vm', 'request': "{{ ncir_cpu_topology | get_cpu_count_by_percent(vm_share_percent) }}", 'where': 'tail' }
+    - { 'name': 'vm', 'request': "{{ cloud_cpu_topology | get_cpu_count_by_percent(vm_share_percent) }}", 'where': 'tail' }
   when:
     - "'compute' in hosts[hostname]['service_profiles']"
 
 - name: Calculate CaaS CPU counts
   set_fact:
-    perf_profile: "{{ perf_profile | combine({ item.key: ncir_cpu_topology | get_cpu_count_by_percent(item.value) }) }}"
+    perf_profile: "{{ perf_profile | combine({ item.key: cloud_cpu_topology | get_cpu_count_by_percent(item.value) }) }}"
   with_dict: "{{ perf_profile['caas_cpu_pools'] | default({}) }}"
   when: hosts[hostname]['service_profiles'] | intersect(caas_service_profiles)
 
@@ -89,19 +89,19 @@
 
 - name: Make set of remaining CPUs.
   set_fact:
-    ncir_cpu_remain: "{{ ncir_cpu_remain | union(item) }}"
-  with_items: "{{ ncir_cpu_topology.values() }}"
+    cloud_cpu_remain: "{{ cloud_cpu_remain | union(item) }}"
+  with_items: "{{ cloud_cpu_topology.values() }}"
 - debug:
-    var: ncir_cpu_remain
+    var: cloud_cpu_remain
 
 - name: Allocate remaining CPUs to platform.
   set_fact:
-    ncir_cpu_sets: "{{ ncir_cpu_sets | combine({ 'platform': ncir_cpu_sets['platform'] | default([]) | union(ncir_cpu_remain) }) }}"
-    ncir_cpu_remain: []
-  when: "ncir_cpu_remain | length > 0"
+    cloud_cpu_sets: "{{ cloud_cpu_sets | combine({ 'platform': cloud_cpu_sets['platform'] | default([]) | union(cloud_cpu_remain) }) }}"
+    cloud_cpu_remain: []
+  when: "cloud_cpu_remain | length > 0"
 
 - debug:
-    var: ncir_cpu_sets
+    var: cloud_cpu_sets
 
 - name: Make sure facts directory exists.
   file:
@@ -111,7 +111,7 @@
 
 - name: Save CPU allocation.
   template:
-    src: ncir_cpu_allocation.fact.j2
+    src: cloud_cpu_allocation.fact.j2
     dest: "{{ allocation_fact_file }}"
   register: cpu_allocation
 

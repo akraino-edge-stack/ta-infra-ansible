@@ -7,21 +7,21 @@
 
 - name: Allocate CPU set.
   set_fact:
-    allocated_cpu_set: "{{ ncir_cpu_topology | cpu_topology_alloc(cpu_request, cpu_set.where) }}"
+    allocated_cpu_set: "{{ cloud_cpu_topology | cpu_topology_alloc(cpu_request, cpu_set.where) }}"
 
 - name: Append allocated CPU set.
   set_fact:
-    combined_cpu_set: "{{ allocated_cpu_set | union(ncir_cpu_sets[cpu_set.name] | default([])) | sort }}"
+    combined_cpu_set: "{{ allocated_cpu_set | union(cloud_cpu_sets[cpu_set.name] | default([])) | sort }}"
 
 - name: Make CPU set.
   set_fact:
-    ncir_cpu_sets: "{{ ncir_cpu_sets | combine({ cpu_set.name: combined_cpu_set }) }}"
-    ncir_cpu_topology: "{{ ncir_cpu_topology | cpu_topology_trim(cpu_request, cpu_set.where) }}"
+    cloud_cpu_sets: "{{ cloud_cpu_sets | combine({ cpu_set.name: combined_cpu_set }) }}"
+    cloud_cpu_topology: "{{ cloud_cpu_topology | cpu_topology_trim(cpu_request, cpu_set.where) }}"
 
 - name: Show created CPU sets.
   debug:
-    var: ncir_cpu_sets
+    var: cloud_cpu_sets
 
 - name: Show CPU topology after sets creation.
   debug:
-    var: ncir_cpu_topology
+    var: cloud_cpu_topology
