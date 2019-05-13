@@ -123,6 +123,7 @@ ln -sf /opt/config-encoder-macros %{buildroot}%{_roles_path}/access-management/t
 mkdir -p %{buildroot}/usr/lib/systemd/system/
 cp systemd/finalize-bootstrap.service %{buildroot}/usr/lib/systemd/system/
 cp systemd/sriov.service %{buildroot}/usr/lib/systemd/system
+cp systemd/report-installation-success.service %{buildroot}/usr/lib/systemd/system
 
 mkdir -p %{buildroot}/opt/ansible-change_kernel_cmdline/
 cp systemd/finalize-bootstrap.sh %{buildroot}/opt/ansible-change_kernel_cmdline/
@@ -131,6 +132,8 @@ mkdir -p %{buildroot}/opt/sriov
 cp systemd/sriov.sh %{buildroot}/opt/sriov
 
 %files
+%attr(0755,root,root) %{_playbooks_path}/report-installation-progress
+%attr(0755,root,root) %{_playbooks_path}/report-installation-success.sh
 %defattr(0644,root,root,0755)
 /root/dev_tools
 %{_playbooks_path}/*

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # Copyright 2019 Nokia
 
@@ -14,23 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o nounset
-set -o errexit
-set -o pipefail
-
-source /opt/cmframework/scripts/common.sh
-
-rm -rf /etc/ansible-change_kernel_cmdline/enabled
-
-if [ ! -f /etc/performance-nodes/dpdk.enabled ]
-then
-    if has_kernel_parameters_changed;
-    then
-       systemctl set-environment _INSTALLATION_SUCCESS='failed'
-       log_installation_failure
+MAX_TRIES=5
+COUNT=0
+while [ $COUNT -lt $MAX_TRIES ]; do
+    if [ "$_INSTALLATION_SUCCESS" == "success" ]; then
+        /opt/openstack-ansible/playbooks/report-installation-progress --status completed --description "Installation complete" --percentage 100
     else
-       systemctl set-environment _INSTALLATION_SUCCESS='success'
-       log_installation_success
+        /opt/openstack-ansible/playbooks/report-installation-progress --status failed --description "Installation failed"
     fi
-    systemctl start report-installation-success.service --no-block
-fi
+
+    if [ "$?" -eq 0 ]; then
+        exit 0
+    fi
+    sleep 10
+    let COUNT=COUNT+1
+done
+
+exit 1

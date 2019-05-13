@@ -1,0 +1,163 @@
+#! /usr/bin/python
+
+# Copyright 2019 Nokia
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import print_function
+import sys
+import argparse
+import logging
+
+import requests
+
+class ProgressReporter(object):
+    CALLBACK_URL_PATH = '/etc/userconfig/callback_url'
+    DEFAULT_CLIENT_CERT = '/etc/userconfig/clientcert.pem'
+    DEFAULT_CLIENT_KEY = '/etc/userconfig/clientkey.pem'
+
+    def __init__(self):
+        self._prog = 'progress-reporter'
+        self._callback_url = None
+        self._verbose = None
+        self._status = None
+        self._percentage = None
+        self._description = None
+        self._client_cert_path = ProgressReporter.DEFAULT_CLIENT_CERT
+        self._client_key_path = ProgressReporter.DEFAULT_CLIENT_KEY
+
+    def __call__(self, args):
+        parser = argparse.ArgumentParser(description='Progress Reporter',
+                                         prog=self._prog)
+
+        parser.add_argument('--callback-url',
+                            dest='callback_url',
+                            metavar='CALLBACK-URL',
+                            required=False,
+                            help='The URL for the report callback',
+                            action='store')
+
+        parser.add_argument('--client-cert-path',
+                            dest='client_cert_path',
+                            metavar='CLIENT-CERT-PATH',
+                            required=False,
+                            help='The path to client cert file',
+                            action='store')
+
+        parser.add_argument('--client-key-path',
+                            dest='client_key_path',
+                            metavar='CLIENT-KEY-PATH',
+                            required=False,
+                            help='The path to client key file',
+                            action='store')
+
+        parser.add_argument('--status',
+                            dest='status',
+                            metavar='STATUS',
+                            required=True,
+                            help='The status of the progress, should be: ongoing or failed or success',
+                            action='store')
+
+        parser.add_argument('--description',
+                            dest='description',
+                            metavar='DESCRIPTION',
+                            required=True,
+                            help='The description of the progress',
+                            action='store')
+
+        parser.add_argument('--percentage',
+                            dest='percentage',
+                            metavar='PERCENTAGE',
+                            required=False,
+                            help='The percentage of the progress',
+                            action='store')
+
+        parser.add_argument('--verbose',
+                            required=False,
+                            default=False,
+                            action='store_true')
+
+        args = parser.parse_args(args)
+
+        self.process(args)
+
+    def _set_callback_url(self):
+        try:
+            with open(ProgressReporter.CALLBACK_URL_PATH) as cf:
+                self._callback_url = cf.readline().strip()
+        except IOError:
+            logging.debug('No callback URL found')
+
+    def _send_progress(self):
+        if self._callback_url:
+            request_data = {'status': self._status, 'description': self._description}
+            if self._percentage:
+                request_data['percentage'] = self._percentage
+
+            cert_tuple = None
+            if self._client_cert_path:
+                cert_tuple = (self._client_cert_path, self._client_key_path)
+
+            response = None
+            try:
+                response = requests.post(self._callback_url, json=request_data, cert=cert_tuple, verify=False)
+                if response.status_code != requests.codes.ok:
+                    logging.debug('Failed to send progress: %s (%s)', str(response.reason), str(response.status_code))
+                    raise Exception('Failed')
+            except Exception as ex:
+                logging.debug('Failed to send progress: %s', str(ex))
+                raise Exception('Failed')
+
+        return True
+
+    def process(self, args):
+        log_level = logging.INFO
+        if args.verbose:
+            log_level = logging.DEBUG
+
+        logging.basicConfig(level=log_level, format='%(asctime)s %(message)s')
+
+        self._callback_url = args.callback_url
+        if not self._callback_url:
+            self._set_callback_url()
+
+        if args.client_cert_path:
+            self._client_cert_path = args.client_cert_path
+
+        if args.client_key_path:
+            self._client_key_path = args.client_key_path
+
+        self._verbose = args.verbose
+        self._status = args.status
+        self._percentage = args.percentage
+        self._description = args.description
+
+        logging.debug('callback_url = %s', self._callback_url)
+        logging.debug('client_cert_path = %s', self._client_cert_path)
+        logging.debug('client_key_path = %s', self._client_key_path)
+        logging.info('status=%s, percentage=%s, description=%s', self._status, self._percentage, self._description)
+
+        self._send_progress()
+
+def main():
+    try:
+        reporter = ProgressReporter()
+        args = sys.argv[1:]
+        reporter(args)
+    except Exception as exp:
+        logging.error('Failed with error: %s', str(exp))
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

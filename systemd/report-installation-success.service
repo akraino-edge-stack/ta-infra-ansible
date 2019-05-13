@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Copyright 2019 Nokia
 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,23 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o nounset
-set -o errexit
-set -o pipefail
+[Unit]
+Description=report installation success
+After=network.target
+Wants=network.target
 
-source /opt/cmframework/scripts/common.sh
-
-rm -rf /etc/ansible-change_kernel_cmdline/enabled
-
-if [ ! -f /etc/performance-nodes/dpdk.enabled ]
-then
-    if has_kernel_parameters_changed;
-    then
-       systemctl set-environment _INSTALLATION_SUCCESS='failed'
-       log_installation_failure
-    else
-       systemctl set-environment _INSTALLATION_SUCCESS='success'
-       log_installation_success
-    fi
-    systemctl start report-installation-success.service --no-block
-fi
+[Service]
+Type=oneshot
+RemainAfterExit=True
+ExecStart=/opt/openstack-ansible/playbooks/report-installation-success.sh
