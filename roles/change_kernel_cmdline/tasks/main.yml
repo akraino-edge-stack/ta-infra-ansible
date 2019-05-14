@@ -18,7 +18,7 @@
 - name: Get configuration.
   set_fact:
     perf_profile: "{{ performance_profiles[hosts[hostname]['performance_profiles'][0]] if 'performance_profiles' in hosts[hostname] else {} }}"
-    cpu_alloc: "{{ ansible_local.cloud_cpu_allocation | default([]) }}"
+    cpu_alloc: "{{ ansible_local.cpu_allocation | default([]) }}"
 - debug:
     var: perf_profile
 - debug:

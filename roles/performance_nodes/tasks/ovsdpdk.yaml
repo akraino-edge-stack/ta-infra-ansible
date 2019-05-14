@@ -16,8 +16,8 @@
 
 - debug:
     msg:
-      - "DPDK cores {{ ansible_local.cloud_cpu_allocation['ovs_dpdk']['list'] }}"
-      - "Platform cores {{ ansible_local.cloud_cpu_allocation['platform']['list'] }}"
+      - "DPDK cores {{ ansible_local.cpu_allocation['ovs_dpdk']['list'] }}"
+      - "Platform cores {{ ansible_local.cpu_allocation['platform']['list'] }}"
       - "Host VPUs  {{ansible_processor_vcpus}}, Processor cores {{ansible_processor_cores}}"
       - "Threads per core {{ansible_processor_threads_per_core}}, Sockets {{ansible_processor_count}}"
 
@@ -42,7 +42,7 @@
   script: >
       configure_ovsdpdk.py --cores {{ansible_processor_vcpus}} --pcore {{ansible_processor_cores}}
       --tcore {{ansible_processor_threads_per_core}} --sockets {{ansible_processor_count}}
-      --dpdkcores {{ ansible_local.cloud_cpu_allocation['ovs_dpdk']['list'] }}
+      --dpdkcores {{ ansible_local.cpu_allocation['ovs_dpdk']['list'] }}
   register: result
   changed_when: result.rc == 0
   failed_when: result.rc == 2
