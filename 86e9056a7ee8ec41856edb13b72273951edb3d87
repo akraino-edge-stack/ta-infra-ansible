@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b315f925_bfc4ab91",
+        "filename": "roles/allocate_cpu_cores/tasks/main.yml",
+        "patchSetId": 1
+      },
+      "lineNbr": 113,
+      "author": {
+        "id": 183
+      },
+      "writtenOn": "2019-05-15T11:02:13Z",
+      "side": 1,
+      "message": "I think we were the ones who brought in this \"remaining to platform\" thing, but now that we are not adding them to platform anymore, we should change this back to the original value on non-CaaS nodes\nso shouldn\u0027t this be:\n- remaining goes to CaaS default on CaaS nodes\n- VMs on non-CaaS computes\n- else platform?",
+      "revId": "86e9056a7ee8ec41856edb13b72273951edb3d87",
+      "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
+      "unresolved": true
+    }
+  ]
+}
