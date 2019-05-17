@@ -15,42 +15,26 @@
 # limitations under the License.
 
 - name: Stop tmux console windows
-  shell: "source /opt/tmux_setup/tmux.inc; tmux_kill {{item.name}}"
-  with_items: "{{baremetal_ironic_nodes_ids}}"
+  shell: "source /opt/tmux_setup/tmux.inc; tmux_kill {{ironic_node_details.name}}"
   ignore_errors: yes
-  loop_control:
-    label: "{{ item.name }}"
-
 
 - name: Stop tmux console session
   shell: "source /opt/tmux_setup/tmux.inc; tmux_kill tmux-session-deploy"
   ignore_errors: yes
 
 - name: Deactivate ipmi sol
-  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[item.name]['hwmgmt']['address']}} -U {{hosts[item.name]['hwmgmt']['user']}} -P {{hosts[item.name]['hwmgmt']['password']}} sol deactivate"
-  with_items: "{{baremetal_ironic_nodes_ids}}"
+  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} sol deactivate"
   ignore_errors: yes
   no_log: True
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Enable shellinabox console logging for target nodes
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
-  command: "ironic node-set-console-mode {{item.name}} true"
-  with_items:
-    - "{{ baremetal_ironic_nodes_ids }}"
-    - {"name": "{{installation_controller}}"}
+  command: "ironic node-set-console-mode {{ironic_node_details.name}} true"
   when:
     - installation_phase == "provisioning-started"
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Enable shellinabox console logging for target nodes
-  command: "openstack --os-cloud default baremetal node console enable {{item.name}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
+  command: "openstack --os-cloud default baremetal node console enable {{ironic_node_details.name}}"
   when:
     - installation_phase != "provisioning-started"
-  loop_control:
-    label: "{{ item.name }}"

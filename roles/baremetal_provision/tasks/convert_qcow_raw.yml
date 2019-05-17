@@ -32,3 +32,22 @@
   command: 'mv /opt/images/guest-image.img.raw /opt/images/guest-image.img'
   when:
     - qemu_img.stdout == " qcow2"
+
+- name: Checking the details of Provisioning images
+  stat:
+    path: "{{ item }}"
+    get_md5: no
+    get_checksum: no
+  with_items:
+    - "/opt/nokia/images/guest-image.img"
+  register: stat_list
+  no_log: True
+
+- name: Change ownership of provisioning images
+  file:
+    path: "{{ item.stat.path }}"
+    owner: "ironic"
+    group: "ironic"
+  with_items: "{{stat_list.results}}"
+  when: item.stat.pw_name != 'ironic'
+  no_log: True
