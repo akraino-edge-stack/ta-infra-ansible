@@ -16,66 +16,56 @@
 
 
 - include: convert_qcow_raw.yml
-
-- name: Convert baremetal_nodes.j2 Jinja2 template to json file
-  template:
-    src: 'baremetal_nodes.j2'
-    dest: '/tmp/baremetal_nodes.json'
-
-- name: Include variables from baremetal_nodes.json
-  include_vars: '/tmp/baremetal_nodes.json'
-
-- name: Remove /tmp/baremetal_nodes.json
-  file:
-    path: "/tmp/baremetal_nodes.json"
-    state: "absent"
-
-- name: Restore baremetal_ironic_nodes variable with ironic_nodes variable
-  set_fact:
-    baremetal_ironic_nodes: "{{ironic_nodes}}"
-  when: baremetal_ironic_nodes is undefined
+  run_once: True
 
 - name: Create vbmc ports for virtual hosts
-  include: vbmc_port_setup.yml
+  include_tasks: vbmc_port_setup.yml
   when: virtual_env
-
-- set_fact:
-    net_conn_details: "{{net_conn_details + [{'node_name': item.name, 'node_ip': item.driver_info.power.os_net_config | json_query('network_config[*].addresses[0].ip_netmask') |  ipaddr('address')}] }}"
-  with_items: "{{ baremetal_ironic_nodes }}"
-  when: item.driver_info.power.os_net_config.network_config[0].type != 'ovs_bridge'
-  no_log: True
-
-- set_fact:
-    net_conn_details: "{{net_conn_details + [{'node_name': item.name, 'node_ip': item.driver_info.power.os_net_config | json_query('network_config[*].members[*].addresses[0].ip_netmask')|first | ipaddr('address')}] }}"
-  with_items: "{{ baremetal_ironic_nodes }}"
-  when: item.driver_info.power.os_net_config.network_config[0].type == 'ovs_bridge'
-  no_log: True
-
-- include: setup_http.yml
-  tags: http_provision
 
 - name: Setup tmux
   copy:
     src: "tmux_setup"
     dest: "/opt/"
 
-- include: ironic_nodes_create.yml
+- include_tasks: ironic_nodes_create.yml
   tags:
     - baremetal-ironic-nodes-create
 
-- include: start_console_logging.yml
+- include_tasks: start_console_logging.yml
   tags:
     - baremetal-ironic-nodes-deploy
   when: virtual_env == false
 
-- include: ironic_nodes_deploy.yml
+- include_tasks: ironic_nodes_deploy.yml
   tags:
     - baremetal-ironic-nodes-deploy
+  when: baremetal_ironic_node_id is defined
 
-- include: stop_console_logging.yml
+- name: Set Ironic node in maintenance.
+  os_ironic_node:
+    cloud: default
+    endpoint_type: internal
+    auth_type: password
+    uuid: "{{ironic_node_details.name}}"
+    maintenance: True
+    deploy: False
+  when:
+    - installation_phase != "provisioning-started"
+
+- name: Set Ironic node in maintenance.
+  environment:
+    IRONIC_URL: "{{ ironic_service_adminurl }}"
+  os_ironic_node:
+    auth:
+    auth_type: 'None'
+    ironic_url: "{{ ironic_service_adminurl }}"
+    uuid: "{{ironic_node_details.name}}"
+    maintenance: True
+    deploy: False
+  when:
+    - installation_phase == "provisioning-started"
+
+- include_tasks: stop_console_logging.yml
   tags:
     - baremetal-ironic-nodes-deploy
   when: virtual_env == false
-
-- include: teardown_http.yml
-  tags: http_provision

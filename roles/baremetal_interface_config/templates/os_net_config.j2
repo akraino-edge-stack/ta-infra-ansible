@@ -14,7 +14,6 @@ for pretty printing the same.
 {%- else %}
     {%- set default_mtu = 1500 %}
 {%- endif %}
-{%- set sriov_mtu = 9000 %}
 {%- set max_mtu = 9000 %}
 {%- set host_network_profiles_list = hosts[ansible_hostname]['network_profiles'] %}
 {%- set host_network_profile_value = hostvars[ansible_hostname]['network_profiles'][host_network_profiles_list[0]] %}
@@ -32,7 +31,7 @@ for pretty printing the same.
     {%- if host_interface_net_mapping|length == 1 and host_provider_network_interfaces|length == 1 %}
         {%- if host_interface_net_mapping.keys()[0] == host_provider_network_interfaces.keys()[0] %}
             {%- set single_nic_setup = True %}
-            {%- if CLOUD_TENANT in host_networking.keys() %}
+            {%- if CLOUD_TENANT in host_networking.keys() and 'interface' in host_networking[CLOUD_TENANT] %}
                 {%- set mtu = default_mtu %}
                 {%- if 'mtu' in host_networking[CLOUD_TENANT] %}
                     {%- set mtu = host_networking[CLOUD_TENANT]['mtu'] %}
@@ -58,6 +57,17 @@ for pretty printing the same.
 {%- else %}
     {%- set host_provider_network_interfaces = {} %}
     {%- set dpdk_in_use = False %}
+{%- endif %}
+{%- set sriov_mtus = {} %}
+{%- if 'sriov_provider_networks' in host_network_profile_value %}
+    {%- for net,iface_info in host_network_profile_value['sriov_provider_networks'].iteritems() %}
+        {%- for tmp,mtu_info in host_networking['provider_networks'].iteritems() if tmp == net %}
+            {%- if 'mtu' in mtu_info %}{% set mtu = mtu_info['mtu'] %}{% else %}{% set mtu = default_mtu %}{% endif %}
+            {%- for iface in iface_info['interfaces'] %}
+                {%- if sriov_mtus.update({iface: mtu}) %}{%- endif %}
+            {%- endfor %}
+        {%- endfor %}
+    {%- endfor %}
 {%- endif %}
 {%- set external_ceph_cidr = None %}
 {%- if config_phase != 'setup' and 'external_ceph' in storage['backends'] %}
@@ -124,12 +134,12 @@ for pretty printing the same.
 {%- if not single_nic_setup %}
 
 {#-
-If all infra ifaces on some phys iface are vlan ifaces it is configured here.
+If all infra ifaces on some phys iface are vlan ifaces then phys iface is configured here.
 Otherwise it gets configured normally on infra iface configuration in the next loop.
 -#}
 {%- for iface,infras in host_interface_net_mapping.iteritems() %}
     {%- set ifacevars = {'create': True, 'mtu': 0} %}
-    {%- for infra,value in host_networking.iteritems() %}
+    {%- for infra,value in all_host_networking.iteritems() %}
         {%- if infra in infras %}
             {%- if value['interface'] == iface %}
                 {%- if ifacevars.update({'create': False}) %}{%- endif %}
@@ -148,6 +158,19 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- endif %}
         {%- endif %}
     {%- endfor %}
+    {%- if 'bond' in iface %}
+        {%- for key,slaves in host_bonding_interfaces.iteritems() if key == iface %}
+            {%- for slave in slaves %}
+                {%- if slave in sriov_mtus and sriov_mtus[slave] > ifacevars.mtu %}
+                    {%- if ifacevars.update({'mtu': sriov_mtus[slave]}) %}{%- endif %}
+                {%- endif %}
+            {%- endfor %}
+        {%- endfor %}
+    {%- else %}
+        {%- if iface in sriov_mtus and sriov_mtus[iface] > ifacevars.mtu %}
+            {%- if ifacevars.update({'mtu': sriov_mtus[iface]}) %}{%- endif %}
+        {%- endif %}
+    {%- endif %}
     {%- if ifacevars.create %}
         {%- if not loopvar.first_entry %},{%- endif %}
         {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
@@ -156,7 +179,7 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- if 'bond' in iface %}
                 {%- for key,slaves in host_bonding_interfaces.iteritems() if key == iface %}
                     "type": "linux_bond",
-                    {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+                    "mtu": {{ifacevars['mtu']}},
                     {%- if 'linux_bonding_options' in  host_network_profile_value %}
                         "bonding_options": "{{ generate_linux_bonding_options(host_network_profile_value['linux_bonding_options']) }}",
                     {%- endif %}
@@ -165,7 +188,7 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                         {
                         "name": "{{slave}}",
                         "type": "interface",
-                        {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+                        "mtu": {{ifacevars['mtu']}},
                         "use_dhcp": false
                         }
                         {% if not loop.last %},{% endif %}
@@ -176,7 +199,7 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                 {%- if configured_phys_ifaces.append(iface) %}{%- endif %}
                 "type": "interface",
             {%- endif %}
-            {% if ifacevars.mtu > 0 %}"mtu": {{ifacevars['mtu']}},{% endif %}
+            "mtu": {{ifacevars['mtu']}},
             "use_dhcp": false
         }
     {%- endif %}
@@ -196,6 +219,7 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                 "name": "{{bond_key}}",
                 "type": "linux_bond",
                 "members": [ {% for member in bond_value %}
+                    {%- if configured_phys_ifaces.append(member) %}{%- endif %}
                     {
                     "name": "{{ member }}",
                     "type": "interface",
@@ -269,41 +293,96 @@ Otherwise it gets configured normally on infra iface configuration in the next l
     {%- endif %}
 {%- endfor %}
 
+{%- if config_phase != 'setup' %}
+{#- configure caas provider network interfaces -#}
+{%- for iface,value in host_provider_network_interfaces.iteritems() if 'caas' in value['type'] %}
+    {%- if not loopvar.first_entry %},{%- endif %}
+    {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+    {%- set ifacevars = {'mtu': 0} %}
+    {
+        "name": "{{iface}}",
+        {%- for mapped_net in value['provider_networks'] %}
+            {%- for net,info in host_networking['provider_networks'].iteritems() if net == mapped_net %}
+                {%- if 'mtu' in info %}
+                    {%- if info['mtu'] > ifacevars.mtu %}
+                        {%- if ifacevars.update({'mtu': info['mtu']}) %}{%- endif %}
+                    {%- endif %}
+                {%- elif default_mtu > ifacevars.mtu %}
+                    {%- if ifacevars.update({'mtu': default_mtu}) %}{%- endif %}
+                {%- endif %}
+            {%- endfor %}
+        {%- endfor %}
+        {%- if 'bond' in iface %}
+            {%- for bond,slaves in host_bonding_interfaces.iteritems() if bond == iface %}
+                {%- for slave in slaves %}
+                    {%- if slave in sriov_mtus and sriov_mtus[slave] > ifacevars.mtu %}
+                        {%- if ifacevars.update({'mtu': sriov_mtus[slave]}) %}{%- endif %}
+                    {%- endif %}
+                {%- endfor %}
+                "type": "linux_bond",
+                "mtu": {{ifacevars.mtu}},
+                {%- if 'linux_bonding_options' in  host_network_profile_value %}
+                    "bonding_options": "{{ generate_linux_bonding_options(host_network_profile_value['linux_bonding_options']) }}",
+                {%- endif %}
+                "members": [ {% for slave in slaves %}
+                    {%- if configured_phys_ifaces.append(slave) %}{%- endif %}
+                    {
+                    "name": "{{slave}}",
+                    "type": "interface",
+                    "mtu": {{ifacevars.mtu}},
+                    "use_dhcp": false
+                    }
+                    {% if not loop.last %},{% endif %}
+                {%- endfor %}
+                ],
+            {%- endfor %}
+        {%- else %}
+            {%- if configured_phys_ifaces.append(iface) %}{%- endif %}
+            {%- if iface in sriov_mtus and sriov_mtus[iface] > ifacevars.mtu %}
+                {%- if ifacevars.update({'mtu': sriov_mtus[iface]}) %}{%- endif %}
+            {%- endif %}
+            "type": "interface",
+        {%- endif %}
+        "mtu": {{ifacevars.mtu}},
+        "use_dhcp": false
+    }
+{%- endfor %}
+{%- endif %}{#- if config_phase != 'setup' -#}
+
 {%- endif %}{#- if not single_nic_setup -#}
 
 {%- if config_phase != 'setup' or single_nic_setup %}
 
-{#- configure provider network interfaces -#}
-{%- for key,value in host_provider_network_interfaces|dictsort(true) %}
+{#- configure ovs-* provider network interfaces -#}
+{%- for key,value in host_provider_network_interfaces|dictsort(true) if 'ovs' in value['type'] %}
     {%- set keyloop = loop %}
-    {%- if 'ovs' in value['type'] %}
-        {%- if not loopvar.first_entry %},{%- endif %}
-        {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
-        {%- if value['type'] == 'ovs-dpdk' %}
-            {%- for bond_key,bond_value in host_bonding_interfaces.iteritems() if bond_key == key %}
-                {%- for member in bond_value %}
-                    {%- if member not in ixgbedevs %}
-                        {%- if configured_phys_ifaces.append(member) %}{%- endif %}
-                        {
-                            "name": "{{member}}",
-                            "type": "interface",
-                            "mtu": {{max_mtu}},
-                            "use_dhcp": false
-                        },
-                    {%- endif %}
-                {%- endfor %}
+    {%- if not loopvar.first_entry %},{%- endif %}
+    {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+    {%- if value['type'] == 'ovs-dpdk' %}
+        {%- for bond_key,bond_value in host_bonding_interfaces.iteritems() if bond_key == key %}
+            {%- for member in bond_value %}
+                {%- if member not in ixgbedevs %}
+                    {%- if configured_phys_ifaces.append(member) %}{%- endif %}
+                    {
+                        "name": "{{member}}",
+                        "type": "interface",
+                        "mtu": {{max_mtu}},
+                        "use_dhcp": false
+                    },
+                {%- endif %}
             {%- endfor %}
-            {%- if 'bond' not in key and key not in ixgbedevs %}
-                {%- if configured_phys_ifaces.append(key) %}{%- endif %}
-                {
-                    "name": "{{key}}",
-                    "type": "interface",
-                    "mtu": {{max_mtu}},
-                    "use_dhcp": false
-                },
-            {%- endif %}
+        {%- endfor %}
+        {%- if 'bond' not in key and key not in ixgbedevs %}
+            {%- if configured_phys_ifaces.append(key) %}{%- endif %}
+            {
+                "name": "{{key}}",
+                "type": "interface",
+                "mtu": {{max_mtu}},
+                "use_dhcp": false
+            },
         {%- endif %}
-        {
+    {%- endif %}
+    {
         "name": "br-pro{{keyloop.index0}}",
         {%- if value['type'] == 'ovs-dpdk' %}
             "type": "ovs_user_bridge",
@@ -434,10 +513,10 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                 {%- endfor %}
             {%- endif %}{#- if single_nic_setup -#}
         ]
-        }
-        {%- for net in value['provider_networks'] %}
-            ,
-            {
+    }
+    {%- for net in value['provider_networks'] %}
+        ,
+        {
             "name": "br-pro{{keyloop.index0}}.{{loop.index0}}",
             {%- if value['type'] == 'ovs-dpdk' %}
                 "type": "ovs_user_bridge",
@@ -453,13 +532,12 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                 "peer": "pro{{keyloop.index0}}-pro{{keyloop.index0}}.{{loop.index0}}"
                 }
             ]
-            }
-        {%- endfor %}
-    {%- endif %}
+        }
+    {%- endfor %}
 {%- endfor %}
 
 {#- configure vxlan bridge for dpdk cloud tenant -#}
-{%- if CLOUD_TENANT in host_networking.keys() and dpdk_in_use %}
+{%- if CLOUD_TENANT in host_networking.keys() and 'interface' in host_networking[CLOUD_TENANT] and dpdk_in_use %}
     {%- set net = host_networking[CLOUD_TENANT] %}
     {%- if not loopvar.first_entry %},{%- endif %}
     {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
@@ -490,20 +568,17 @@ Otherwise it gets configured normally on infra iface configuration in the next l
 
 {#- configure sr-iov ifaces -#}
 {%- if config_phase != 'setup' %}
-{%- if 'sriov_provider_networks' in host_network_profile_value %}
-    {%- for net,net_info in host_network_profile_value['sriov_provider_networks'].iteritems() %}
-        {%- for iface in net_info['interfaces'] %}
-            {%- if iface not in configured_phys_ifaces %}
-                {%- if not loopvar.first_entry %},{%- endif %}
-                {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
-                {
+    {%- for iface,mtu in sriov_mtus.iteritems() %}
+        {%- if iface not in configured_phys_ifaces %}
+            {%- if not loopvar.first_entry %},{%- endif %}
+            {%- if loopvar.update({'first_entry': False}) %}{%- endif %}
+            {
                 "name": "{{iface}}",
                 "type": "interface",
-                "mtu": {{sriov_mtu}},
+                "mtu": {{mtu}},
                 "use_dhcp": false
-                }
-            {%- endif %}
-        {%- endfor %}
+            }
+        {%- endif %}
     {%- endfor %}
 {%- endif %}
 {%- endif %}{#- if config_phase != 'setup' -#}
