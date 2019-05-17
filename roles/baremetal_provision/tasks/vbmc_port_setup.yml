@@ -26,17 +26,13 @@
     dest: "/etc/virtualbmc/"
 
 - name: Create vbmc nodes
-  command: /usr/bin/vbmc add {{ item.name }} --libvirt-uri "qemu+ssh://root@{{item.driver_info['power']['ssh_address'] | ipwrap}}/system?no_verify=1" --port {{ item.driver_info['power']['ipmi_port'] }}
+  command: /usr/bin/vbmc add {{ ironic_node_details.name }} --libvirt-uri "qemu+ssh://root@{{ironic_node_details.driver_info['power']['ssh_address'] | ipwrap}}/system?no_verify=1" --port {{ ironic_node_details.driver_info['power']['ipmi_port'] }}
   become: True
   become_flags: '-H'
   register: vbmc_out
-  with_items: "{{ baremetal_ironic_nodes }}"
   failed_when: "vbmc_out.rc != 0 and 'already exists' not in vbmc_out.stderr"
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Start vbmc node ports
-  command: sudo /usr/bin/vbmc start {{ item.name }}
-  with_items: "{{ baremetal_ironic_nodes }}"
-  loop_control:
-    label: "{{ item.name }}"
+  command: sudo /usr/bin/vbmc start {{ ironic_node_details.name }}
+  register: vbmc_start_out
+  failed_when: "vbmc_start_out.rc != 0 and 'already running' not in vbmc_start_out.stderr"

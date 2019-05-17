@@ -26,7 +26,6 @@
         - hosts|count > 1
         - reinitialized_nodes is not defined or (inventory_hostname not in reinitialized_nodes)
 
-
 - name: Make sure nfs server is toren down before we start
   hosts: baremetal-infra_hosts
   tasks:
@@ -37,8 +36,11 @@
 
 - name: NFS server setup
   hosts: baremetal-infra_hosts
+  vars_files:
+    - "/etc/ansible/roles/baremetal_provision/defaults/main.yml"
   tasks:
     - include: baremetal-setup-nfs-server.yaml
+    - include: baremetal_setup_http.yml
       when: hosts|count > 1
 
 - name:  Setup NFS mount points on other controllers where Ironic conductor is running
@@ -52,12 +54,15 @@
         - reinitialized_nodes is not defined or (inventory_hostname not in reinitialized_nodes)
 
 - name: Install baremetal nodes for this cloud infra
-  hosts: baremetal-infra_hosts
-  gather_facts: "{{ gather_facts | default(True) }}"
+  hosts: baremetal-nodes
+  gather_facts: False
   max_fail_percentage: 20
+  vars_files:
+    - /opt/openstack-ansible/inventory/group_vars/ironic_all.yml
   roles:
     - role: baremetal_provision
       when: hosts|count > 1
+      delegate_to: localhost
 
 - name:  Tear down NFS mount points on other controllers where Ironic conductor is running
   hosts: ironic_conductor
@@ -72,5 +77,6 @@
   hosts: baremetal-infra_hosts
   tasks:
     - include: baremetal-rm-nfs-server.yaml
+    - include: baremetal_teardown_http.yml
       when:
         - hosts|count > 1

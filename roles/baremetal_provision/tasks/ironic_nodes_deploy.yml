@@ -26,127 +26,117 @@
     in_interface: "{{ networking['infra_internal']['interface'] }}"
   when:
     - installation_phase == "provisioning-started"
+    - not virtual_env
+  run_once: true
 
 - name: Power off nodes
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
-  command: "/usr/bin/ironic node-set-power-state {{item.uuid}} off"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
+  command: "/usr/bin/ironic node-set-power-state {{baremetal_ironic_node_id.uuid}} off"
   when:
     - not virtual_env
     - installation_phase == "provisioning-started"
   retries: 5
   delay: 10
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Power off nodes
-  command: "openstack --os-cloud default baremetal node power off {{item.uuid}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
+  command: "openstack --os-cloud default baremetal node power off {{baremetal_ironic_node_id.uuid}}"
   when:
     - not virtual_env
     - installation_phase != "provisioning-started"
   retries: 5
   delay: 10
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Ensure nodes are powered off
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
   os_node_power_check:
     auth:
     auth_type: 'None'
     ironic_url: "{{ ironic_service_adminurl }}"
-    nodes_details: "{{ baremetal_ironic_nodes_ids }}"
+    nodes_details:
+      - "{{ baremetal_ironic_node_id }}"
     power_state: 'power off'
   until: power_pending_list | length == 0
   retries: 30
   delay: 6
   when:
-    - not virtual_env and baremetal_ironic_nodes_ids | length > 0
+    - not virtual_env
     - installation_phase == "provisioning-started"
-  no_log: True
+  #no_log: True
 
 - name: Ensure nodes are powered off
   os_node_power_check:
     cloud: default
     auth_type: password
     ironic_url: "{{ ironic_service_adminurl }}"
-    nodes_details: "{{ baremetal_ironic_nodes_ids }}"
+    nodes_details:
+      - "{{ baremetal_ironic_node_id }}"
     power_state: 'power off'
     endpoint_type: internal
   until: power_pending_list | length == 0
   retries: 30
   delay: 6
   when:
-    - not virtual_env and baremetal_ironic_nodes_ids | length > 0
+    - not virtual_env
     - installation_phase != "provisioning-started"
-  no_log: True
+  #no_log: True
 
 # Sleep to make sure power is off
 - name: Sleep for 15 seconds
   pause:
     seconds: 15
-  when: not virtual_env and baremetal_ironic_nodes_ids | length > 0
+  when: not virtual_env
 
 - name: Create config-drive directories for all nodes
   file:
-    path: "/var/lib/ironic/confdrive/{{item.name}}/openstack/latest/"
+    path: "/var/lib/ironic/confdrive/{{baremetal_ironic_node_id.name}}/openstack/latest/"
     state: "directory"
     owner: "ironic"
     group: "ironic"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
-  loop_control:
-    label: "{{ item.name }}"
+    mode: "0775"
 
 - name: Generate config-drive files
   config_template:
-    src: "{{ item[1].src }}"
-    dest: "/var/lib/ironic/confdrive/{{item[0].name}}/openstack/latest/{{ item[1].dest }}"
+    src: "{{item.src}}"
+    dest: "/var/lib/ironic/confdrive/{{baremetal_ironic_node_id.name}}/openstack/latest/{{item.dest}}"
     owner: "ironic"
     group: "ironic"
     mode: "0644"
-    config_type: "{{ item[1].config_type }}"
-  with_nested: 
-    - "{{ baremetal_ironic_nodes_ids }}"
+    config_type: "{{item.config_type}}"
+  with_items:
     - "{{ config_drive_templates }}"
-  loop_control:
-    label: "{{ item[0].name }}"
 
 - name: Stat config-drive files to check if they exists
   stat:
-    path: "/var/lib/ironic/confdrive/{{ item.name }}.base64"
+    path: "/var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64"
   register: confdrive_stat
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
 
 - name: Prepare Config-drive ISO file
   shell: |
     # Generated ISO
-    genisoimage -o /var/lib/ironic/confdrive/{{ item.item.name }}.iso -ldots -allow-lowercase -allow-multidot -l -publisher 'ironicclient-configdrive 0.1' -quiet -J -r -V config-2 /var/lib/ironic/confdrive/{{ item.item.name }}
+    genisoimage -o /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.iso -ldots -allow-lowercase -allow-multidot -l -publisher 'ironicclient-configdrive 0.1' -quiet -J -r -V config-2 /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}
     # Zip it!
-    gzip /var/lib/ironic/confdrive/{{ item.item.name }}.iso
+    gzip /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.iso
     # Encode it to base64
-    base64 -w 0 /var/lib/ironic/confdrive/{{ item.item.name }}.iso.gz > /var/lib/ironic/confdrive/{{ item.item.name }}.base64
-  when: not item.stat.exists
-  with_items: "{{confdrive_stat.results}}"
+    base64 -w 0 /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.iso.gz > /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64
+    chown ironic:ironic /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.iso.gz
+    chown ironic:ironic /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64
+    chmod o+r /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.iso.gz
+    chmod o+r /var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64
+  when: not confdrive_stat.stat.exists
 
 - name: Remove os_net_config temp files
   file:
-    dest: "/tmp/{{item.name}}_config.yaml"
+    dest: "/tmp/{{baremetal_ironic_node_id.name}}_config.yaml"
     state: absent
-  with_items: "{{ baremetal_ironic_nodes }}"
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Calculate md5sum of Golden image
   stat:
     path: "/opt/images/guest-image.img"
     get_md5: yes
   register: golden_img_md5sum
-  when: baremetal_ironic_nodes_ids | length > 0
+  run_once: true
 
 - name: Enable traffic on infra_internal
   iptables:
@@ -156,27 +146,31 @@
     in_interface: "{{ networking['infra_internal']['interface'] }}"
   when:
     - installation_phase == "provisioning-started"
+    - not virtual_env
+  run_once: true
+
+- set_fact:
+    initiator_host: "{{ lookup('file', '/etc/hostname') }}"
+
+- set_fact:
+    initiator_host_ip: "{{ hostvars[initiator_host]['networking']['infra_internal']['ip'] }}"
 
 - name: Configure Baremetal deployment
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
   os_ironic_node:
     auth:
     auth_type: 'None'
     ironic_url: "{{ ironic_service_adminurl }}"
-    uuid: "{{item.uuid}}"
+    uuid: "{{baremetal_ironic_node_id.uuid}}"
     deploy: False
     state: present
     power: absent
     maintenance: False
     instance_info:
       root_gb: 10
-      image_source: "http://{{ansible_host}}:{{golden_image_http_port}}/guest-image.img"
+      image_source: "http://{{initiator_host_ip}}:{{golden_image_http_port}}/guest-image.img"
       image_checksum: "{{golden_img_md5sum.stat.md5}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
-  loop_control:
-    label: "{{ item.name }}"
   when:
     - installation_phase == "provisioning-started"
 
@@ -185,24 +179,20 @@
     cloud: default
     endpoint_type: internal
     auth_type: password
-    uuid: "{{item.uuid}}"
+    uuid: "{{baremetal_ironic_node_id.uuid}}"
     deploy: False
     state: present
     power: absent
     maintenance: False
     instance_info:
       root_gb: 10
-      image_source: "http://{{ansible_host}}:{{golden_image_http_port}}/guest-image.img"
+      image_source: "http://{{initiator_host_ip}}:{{golden_image_http_port}}/guest-image.img"
       image_checksum: "{{golden_img_md5sum.stat.md5}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
-  loop_control:
-    label: "{{ item.name }}"
   when:
     - installation_phase != "provisioning-started"
 
 - name: Start Baremetal deployment
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
   os_ironic_node:
     auth:
@@ -210,15 +200,12 @@
     ironic_url: "{{ ironic_service_adminurl }}"
     deploy: True
     power: present
-    config_drive: "{{lookup('file', '/var/lib/ironic/confdrive/{{ item.name }}.base64')}}"
-    uuid: "{{item.uuid}}"
+    config_drive: "{{lookup('file', '/var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64')}}"
+    uuid: "{{baremetal_ironic_node_id.uuid}}"
     instance_info:
       root_gb: 10
-      image_source: "http://{{ansible_host}}:{{golden_image_http_port}}/guest-image.img"
+      image_source: "http://{{initiator_host_ip}}:{{golden_image_http_port}}/guest-image.img"
       image_checksum: "{{golden_img_md5sum.stat.md5}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
-  loop_control:
-    label: "{{ item.name }}"
   when:
     - installation_phase == "provisioning-started"
 
@@ -229,27 +216,24 @@
     auth_type: password
     deploy: True
     power: present
-    config_drive: "{{lookup('file', '/var/lib/ironic/confdrive/{{ item.name }}.base64')}}"
-    uuid: "{{item.uuid}}"
+    config_drive: "{{lookup('file', '/var/lib/ironic/confdrive/{{ baremetal_ironic_node_id.name }}.base64')}}"
+    uuid: "{{baremetal_ironic_node_id.uuid}}"
     instance_info:
       root_gb: 10
-      image_source: "http://{{ansible_host}}:{{golden_image_http_port}}/guest-image.img"
+      image_source: "http://{{initiator_host_ip}}:{{golden_image_http_port}}/guest-image.img"
       image_checksum: "{{golden_img_md5sum.stat.md5}}"
-  with_items: "{{ baremetal_ironic_nodes_ids }}"
-  loop_control:
-    label: "{{ item.name }}"
   when:
     - installation_phase != "provisioning-started"
 
 - name: Verify node provisioning state. Waiting for 60mins max.
   environment:
-    OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
   os_node_provision_check:
     auth:
     auth_type: 'None'
     ironic_url: "{{ ironic_service_adminurl }}"
-    nodes_details: "{{baremetal_ironic_nodes_ids}}"
+    nodes_details:
+      - "{{baremetal_ironic_node_id}}"
   register: baremetal_ironic_node_provisionin_results
   until: provision_pending_list | length == 0
   retries: 360
@@ -269,7 +253,8 @@
     cloud: default
     endpoint_type: internal
     auth_type: password
-    nodes_details: "{{baremetal_ironic_nodes_ids}}"
+    nodes_details:
+      - "{{baremetal_ironic_node_id}}"
   register: baremetal_ironic_node_provisionin_results
   until: provision_pending_list | length == 0
   retries: 360
@@ -283,11 +268,21 @@
   when:
     - installation_phase != "provisioning-started"
     - baremetal_ironic_node_provisionin_results['ansible_facts']['provision_failed_list'] | length > 0
+
+- set_fact:
+    net_conn_details: "{{ ironic_node_details.driver_info.power.os_net_config | json_query('network_config[*].addresses[0].ip_netmask') |  ipaddr('address') }}"
+  when: ironic_node_details.driver_info.power.os_net_config.network_config[0].type != 'ovs_bridge'
+  no_log: True
+
+- set_fact:
+    net_conn_details: "{{ ironic_node_details.driver_info.power.os_net_config | json_query('network_config[*].members[*].addresses[0].ip_netmask')|first | ipaddr('address') }}"
+  when: ironic_node_details.driver_info.power.os_net_config.network_config[0].type == 'ovs_bridge'
+  no_log: True
 
 # JanneS: until looping is a fix for the problem in wait_for module; it does not catch socket error in recv if peer closes the connection.
 - name: Verify remote node ssh ports active. Waiting for 60mins max.
   wait_for:
-     host: "{{ item.node_ip[0] }}"
+     host: "{{ net_conn_details[0] }}"
      port: 22
      search_regex: OpenSSH
      sleep: 5
@@ -295,44 +290,11 @@
   register: remote_success
   until: remote_success | success
   retries: 3
-  with_items: "{{net_conn_details}}"
 
 - name: Wait for remote node ssh login. Waiting for 10mins max.
-  become: "{{ ansible_env.SUDO_USER }}"
-  local_action: shell ssh -oBatchMode=yes -4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ item.node_ip[0] }} "echo success"
+  become: "{{ users.admin_user_name }}"
+  local_action: shell ssh -oBatchMode=yes -4 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {{ net_conn_details[0] }} "echo success"
   register: user_enabled
-  with_items: "{{net_conn_details}}"
   until: user_enabled.stdout.find("success") != -1
   retries: 90
   delay: 10
-
-- name: Set Ironic maintenance mode to all nodes.
-  os_ironic_node:
-    cloud: default
-    endpoint_type: internal
-    auth_type: password
-    uuid: "{{item.name}}"
-    maintenance: True
-    deploy: False
-  with_items: "{{ baremetal_ironic_nodes }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when:
-    - installation_phase != "provisioning-started"
-
-- name: Set Ironic maintenance mode to all nodes.
-  environment:
-    OS_AUTH_TOKEN: "fake-token"
-    IRONIC_URL: "{{ ironic_service_adminurl }}"
-  os_ironic_node:
-    auth:
-    auth_type: 'None'
-    ironic_url: "{{ ironic_service_adminurl }}"
-    uuid: "{{item.name}}"
-    maintenance: True
-    deploy: False
-  with_items: "{{ baremetal_ironic_nodes }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when:
-    - installation_phase == "provisioning-started"
