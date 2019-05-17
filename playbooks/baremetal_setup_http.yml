@@ -22,12 +22,12 @@
 
 - name: Create nginx conf file
   template:
-    src: "guest-img-nginx.conf.j2"
+    src: "/etc/ansible/roles/baremetal_provision/templates/guest-img-nginx.conf.j2"
     dest: "/opt/guest-img-nginx/nginx.conf"
 
 - name: Create nginx service for provisioning
   copy:
-    src: "guest-img-nginx.service"
+    src: "/etc/ansible/roles/baremetal_provision/templates/guest-img-nginx.service"
     dest: "/usr/lib/systemd/system/"
 
 - name: start guest-img-nginx.service service
