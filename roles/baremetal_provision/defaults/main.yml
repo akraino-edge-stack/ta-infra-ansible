@@ -18,8 +18,6 @@
 ## Verbosity Options
 debug: False
 
-net_conn_details: []
-baremetal_ironic_nodes_ids: []
 config_drive_templates:
     - src: "meta_data.json.j2"
       dest: "meta_data.json"
