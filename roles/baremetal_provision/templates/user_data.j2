@@ -17,7 +17,7 @@ users:
   - name: "{{users.admin_user_name}}"
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
     ssh-authorized-keys:
-      - "{{ lookup('file', ansible_env.PWD + '/.ssh/id_rsa.pub') }}"
+      - "{{ lookup('file', home_dir + '/.ssh/id_rsa.pub') }}"
     passwd: {{users.admin_user_password}}
     lock_passwd: False
 
@@ -29,6 +29,6 @@ Content-Disposition: attachment; filename="boothook.sh"
 
 #!/bin/bash
 mkdir -p /etc/os-net-config/
-echo '{{lookup('file', '/tmp/'+item[0].name+'_config.yaml')}}' > /etc/os-net-config/config.yaml
+echo '{{lookup('file', '/tmp/'+ironic_node_details.name+'_config.yaml')}}' > /etc/os-net-config/config.yaml
 /usr/bin/os-net-config
 --===============9156907225490855809==--
