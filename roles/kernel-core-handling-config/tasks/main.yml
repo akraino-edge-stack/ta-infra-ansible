@@ -14,9 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+- name: Check if crashkernel is defined
+  shell: cat /proc/cmdline
+  register: cmdline
+
 - name: Remove restriction of used cpus (not compatible with our own options)
   replace:
     path: /etc/sysconfig/kdump
     regexp: '^(KDUMP_COMMANDLINE_APPEND=.*["\s])nr_cpus=1(["\s].*)$'
     replace: '\1nr_cpus=0\2'
+  changed_when: cmdline.stdout.find('crashkernel') != -1
   notify: Restart kdump
