@@ -46,7 +46,7 @@
   environment:
     OS_AUTH_TOKEN: "fake-token"
     IRONIC_URL: "{{ ironic_service_adminurl }}"
-  os_ironic:
+  os_ironic_props:
     auth:
     auth_type: 'None'
     ironic_url: "{{ ironic_service_adminurl }}"
@@ -73,7 +73,7 @@
   no_log: True
 
 - name: Create baremetal ironic nodes
-  os_ironic:
+  os_ironic_props:
     cloud: default
     endpoint_type: internal
     auth_type: password
