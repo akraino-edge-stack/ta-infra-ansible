@@ -41,7 +41,7 @@ platform_cpus:
     controller:
       shared: 2
     storage:
-      shared: 2
+      shared: 1
     compute:
       shared: 1
     caas_master:
