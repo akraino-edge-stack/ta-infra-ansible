@@ -13,34 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-- name: Checking the details of Provisioning images
-  stat:
-    path: "{{ item }}"
-    get_md5: no
-    get_checksum: no
-  with_items:
-    - "/opt/images/guest-image.img"
-  register: stat_list
-  no_log: True
-
-- name: Change ownership of provisioning images
-  file:
-    path: "{{ item.stat.path }}"
-    owner: "ironic"
-    group: "ironic"
-  with_items: "{{stat_list.results}}"
-  when: item.stat.pw_name != 'ironic'
-  no_log: True
-
 - name: Write os_net_config to tmp files
   copy:
-    content: "{{ item.driver_info.power.os_net_config }}"
-    dest: "/tmp/{{item.name}}_config.yaml"
+    content: "{{ ironic_node_details.driver_info.power.os_net_config }}"
+    dest: "/tmp/{{ironic_node_details.name}}_config.yaml"
     mode: 0444
-  with_items: "{{ baremetal_ironic_nodes }}"
-  loop_control:
-    label: "{{ item.name }}"
 
 - name: Create baremetal ironic nodes
   environment:
@@ -51,26 +28,23 @@
     auth_type: 'None'
     ironic_url: "{{ ironic_service_adminurl }}"
     state: present
-    name: "{{ item.1.name }}"
-    driver: "{{ item.1.driver }}"
-    nics: "{{ item.1.nics }}"
-    properties: "{{ item.1.properties }}"
-    driver_info: "{{ item.1.driver_info | combine({'power': {'os_net_config': lookup('file', '/tmp/'+item.1.name+'_config.yaml'), 'ipmi_terminal_port': hosts[item.1.name]['ipmi_terminal_port'] }}, recursive=True ) }}"
-  with_indexed_items: "{{ baremetal_ironic_nodes }}"
+    name: "{{ ironic_node_details.name }}"
+    driver: "{{ ironic_node_details.driver }}"
+    nics: "{{ ironic_node_details.nics }}"
+    properties: "{{ ironic_node_details.properties }}"
+    driver_info: "{{ ironic_node_details.driver_info | combine({'power': {'os_net_config': lookup('file', '/tmp/'+ironic_node_details.name+'_config.yaml'), 'ipmi_terminal_port': hosts[ironic_node_details.name]['ipmi_terminal_port'] }}, recursive=True ) }}"
+    driver_info: "{{ ironic_node_details.driver_info | combine({'power': {'os_net_config': lookup('file', '/tmp/'+ironic_node_details.name+'_config.yaml'), 'ipmi_terminal_port': hosts[ironic_node_details.name]['ipmi_terminal_port'], 'provisioning_server_http_port': golden_image_http_port }}, recursive=True ) }}"
+
   register: baremetal_ironic_nodes_results
   when: installation_phase == "provisioning-started"
-  loop_control:
-    label: "{{ item.1.name }}"
 
-- name: Create list of nodes which are not in active state and not the installation controller.
+- name: Create node datastructure if its not in active state and not the installation controller.
   set_fact:
-    baremetal_ironic_nodes_ids: "{{ baremetal_ironic_nodes_ids  +  [{'uuid': item.uuid, 'name': item.item.1.name}] }}"
-  with_items: "{{ baremetal_ironic_nodes_results.results }}"
+    baremetal_ironic_node_id: {"uuid": "{{baremetal_ironic_nodes_results.uuid}}", "name": "{{ironic_node_details.name}}" }
   when:
     - installation_phase == "provisioning-started"
-    - hosts[item.item.1.name]['installation_host'] is undefined
-    - item.provision_state != 'active'
-  no_log: True
+    - hosts[ironic_node_details.name]['installation_host'] is undefined
+    - baremetal_ironic_nodes_results.provision_state != 'active'
 
 - name: Create baremetal ironic nodes
   os_ironic_props:
@@ -78,23 +52,18 @@
     endpoint_type: internal
     auth_type: password
     state: present
-    name: "{{ item.1.name }}"
-    driver: "{{ item.1.driver }}"
-    nics: "{{ item.1.nics }}"
-    properties: "{{ item.1.properties }}"
-    driver_info: "{{ item.1.driver_info | combine({'power': {'os_net_config': lookup('file', '/tmp/'+item.1.name+'_config.yaml'), 'ipmi_terminal_port': hosts[item.1.name]['ipmi_terminal_port'] }}, recursive=True ) }}"
-  with_indexed_items: "{{ baremetal_ironic_nodes }}"
+    name: "{{ ironic_node_details.name }}"
+    driver: "{{ ironic_node_details.driver }}"
+    nics: "{{ ironic_node_details.nics }}"
+    properties: "{{ ironic_node_details.properties }}"
+    driver_info: "{{ ironic_node_details.driver_info | combine({'power': {'os_net_config': lookup('file', '/tmp/'+ironic_node_details.name+'_config.yaml'), 'ipmi_terminal_port': hosts[ironic_node_details.name]['ipmi_terminal_port'], 'provisioning_server_http_port': golden_image_http_port }}, recursive=True ) }}"
   register: baremetal_ironic_nodes_results
-  when: (installation_phase != "provisioning-started" and reinitialized_nodes is not defined and scaled_out_nodes is not defined) or (reinitialized_nodes is defined and item.1.name in reinitialized_nodes) or (scaled_out_nodes is defined and item.1.name in scaled_out_nodes)
-  loop_control:
-    label: "{{ item.1.name }}"
+  when: (installation_phase != "provisioning-started" and reinitialized_nodes is not defined and scaled_out_nodes is not defined) or (reinitialized_nodes is defined and ironic_node_details.name in reinitialized_nodes) or (scaled_out_nodes is defined and ironic_node_details.name in scaled_out_nodes)
 
-- name: Create list of nodes which are not in active state and not the installation controller.
+- name: Create node datastructure if its not in active state and not the installation controller.
   set_fact:
-    baremetal_ironic_nodes_ids: "{{ baremetal_ironic_nodes_ids  +  [{'uuid': item.uuid, 'name': item.item.1.name}] }}"
-  with_items: "{{ baremetal_ironic_nodes_results.results }}"
+    baremetal_ironic_node_id: {"uuid": "{{baremetal_ironic_nodes_results.uuid}}", "name": "{{ironic_node_details.name}}" }
   when:
     - installation_phase != "provisioning-started"
-    - (hosts[item.item.1.name]['installation_host'] is undefined and reinitialized_nodes is not defined and scaled_out_nodes is not defined) or (reinitialized_nodes is defined and item.item.1.name in reinitialized_nodes) or (scaled_out_nodes is defined and item.item.1.name in scaled_out_nodes)
-    - item.provision_state != 'active'
-  no_log: True
+    - (hosts[ironic_node_details.name]['installation_host'] is undefined and reinitialized_nodes is not defined and scaled_out_nodes is not defined) or (reinitialized_nodes is defined and ironic_node_details.name in reinitialized_nodes) or (scaled_out_nodes is defined and ironic_node_details.name in scaled_out_nodes)
+    - baremetal_ironic_nodes_results.provision_state != 'active'
