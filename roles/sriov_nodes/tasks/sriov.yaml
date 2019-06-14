@@ -43,11 +43,3 @@
 
 - debug: var=configure_vf_count_result.stderr_lines
   when: configure_vf_count_result.rc != 0
-
-- name: Restart sriov service
-  systemd:
-    service: sriov
-    state: restarted
-  when:
-    - hostname == installation_controller
-    - ('caas_master' in hosts[hostname]['service_profiles']) or ('caas_worker' in hosts[hostname]['service_profiles'])
