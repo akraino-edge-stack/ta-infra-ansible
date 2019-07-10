@@ -23,7 +23,7 @@
   ignore_errors: yes
 
 - name: Deactivate ipmi sol
-  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} sol deactivate"
+  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} -L {{hosts[ironic_node_details.name]['hwmgmt']['priv_level']}} sol deactivate"
   ignore_errors: yes
   no_log: True
 

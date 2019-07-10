@@ -15,7 +15,7 @@
 # limitations under the License.
 
 - name: Deactivate ipmi sol
-  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} sol deactivate"
+  command: "/usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} -L {{hosts[ironic_node_details.name]['hwmgmt']['priv_level']}} sol deactivate"
   ignore_errors: yes
   no_log: True
 
@@ -45,5 +45,5 @@
   shell: "source /opt/tmux_setup/tmux.inc; tmux_session_start bash /bin/bash"
 
 - name: Start tmux windows for each nodes
-  shell: "source /opt/tmux_setup/tmux.inc; tmux_cmd {{ironic_node_details.name}} /usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} sol activate"
+  shell: "source /opt/tmux_setup/tmux.inc; tmux_cmd {{ironic_node_details.name}} /usr/bin/ipmitool -I lanplus -H {{hosts[ironic_node_details.name]['hwmgmt']['address']}} -U {{hosts[ironic_node_details.name]['hwmgmt']['user']}} -P {{hosts[ironic_node_details.name]['hwmgmt']['password']}} -L {{hosts[ironic_node_details.name]['hwmgmt']['priv_level']}} sol activate"
   no_log: True
