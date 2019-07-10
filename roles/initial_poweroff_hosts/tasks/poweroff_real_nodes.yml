@@ -15,7 +15,7 @@
 # limitations under the License.
 
 - name: Ensure all the nodes in the deployment are powered-off.
-  command: "/usr/bin/ipmitool -I lanplus -H {{item.value['hwmgmt']['address']}} -U {{item.value['hwmgmt']['user']}} -P {{item.value['hwmgmt']['password']}} chassis power off"
+  command: "/usr/bin/ipmitool -I lanplus -H {{item.value['hwmgmt']['address']}} -U {{item.value['hwmgmt']['user']}} -P {{item.value['hwmgmt']['password']}} -L {{item.value['hwmgmt']['priv_level']}} chassis power off"
   with_dict: "{{nodes_to_power_off}}"
   no_log: True
   when:

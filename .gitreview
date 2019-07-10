@@ -1,5 +1,5 @@
 [gerrit]
 host=gerrit.att-akraino.org
 port=29418
-project=rec/infra-ansible
+project=ta/infra-ansible
 defaultremote=origin
