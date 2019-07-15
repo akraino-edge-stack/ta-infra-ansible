@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b31ba2a3_38d94e20",
+        "filename": ".gitreview",
+        "patchSetId": 2
+      },
+      "lineNbr": 2,
+      "author": {
+        "id": 186
+      },
+      "writtenOn": "2019-07-15T07:56:23Z",
+      "side": 1,
+      "message": "Please also correct this one.",
+      "range": {
+        "startLine": 2,
+        "startChar": 5,
+        "endLine": 2,
+        "endChar": 27
+      },
+      "revId": "9e107dfbd07c5b49d810ed2705e51cf4e7ce5d80",
+      "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
+      "unresolved": true
+    }
+  ]
+}
