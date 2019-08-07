@@ -32,7 +32,11 @@
   ["am/roles/permissions","POST","Adding a new permission for a role"],
   ["am/roles/permissions","DELETE","Removing a permission from a role"],
   ["am/permissions","GET","Listing all the permissions & endpoints"],
-  ["am/permissions/details","GET","Listing a single resource & operations"]
+  ["am/permissions/details","GET","Listing a single resource & operations"],
+  ["caas/log/apps","GET","Get CaaS Subsystem tenant log backend entries"],
+  ["caas/log/apps","POST","Set CaaS Subsystem tenant log store entry"],
+  ["caas/log/apps","DELETE","Remove CaaS Subsystem tenant log backend entry by index"],
+  ["caas/log/apps","PUT","Update CaaS Subsystem tenant log backend entry by index"]
  ],
  "user_roles": [
   ["{{ keystone_admin_user_name }}","basic_member"],
@@ -63,6 +67,10 @@
   ["infrastructure_admin","am/roles/permissions","DELETE"],
   ["infrastructure_admin","am/permissions","GET"],
   ["infrastructure_admin","am/permissions/details","GET"],
+  ["infrastructure_admin","caas/log/apps","GET"],
+  ["infrastructure_admin","caas/log/apps","POST"],
+  ["infrastructure_admin","caas/log/apps","PUT"],
+  ["infrastructure_admin","caas/log/apps","DELETE"],
   ["basic_member","am/users/ownpasswords","POST"],
   ["basic_member","am/users/owndetails","GET"],
   ["linux_user","am/users/keys","POST"],
