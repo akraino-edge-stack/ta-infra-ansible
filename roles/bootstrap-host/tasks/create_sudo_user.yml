@@ -38,13 +38,22 @@
   tags:
     - ssh-key-authorized
 
-- name: Ensure root's new public ssh key is in authorized_keys
+- name: Ensure sudo user's new public ssh key is in authorized_keys
   authorized_key:
     user: "{{ sudo_user }}"
     key: "{{ lookup('file','/tmp/id_rsa.pub') }}"
     manage_dir: no
+    exclusive: yes
   tags:
     - ssh-key-authorized
+
+- name: Populate authorized keys from config to sudo user
+  authorized_key:
+    user: "{{ sudo_user }}"
+    key: "{{ sudo_user_authorized_keys | join('\n') }}"
+    manage_dir: no
+  tags:
+    - configured-authorized-keys
 
 - name: Ensure there is a private key /etc/userconfig/id_rsa in virtual env. Provide read permissions to all users
   file:
