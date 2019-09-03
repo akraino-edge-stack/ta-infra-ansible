@@ -22,3 +22,13 @@
   become_user: root
   roles:
       - monitoring
+
+- name: Harden services
+  hosts: [ base ]
+  become: yes
+  become_method: sudo
+  become_user: root
+  tasks:
+      - include_role:
+          name: monitoring
+          tasks_from: harden_services.yml
