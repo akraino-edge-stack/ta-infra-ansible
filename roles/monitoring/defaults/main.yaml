@@ -15,3 +15,13 @@
 # limitations under the License.
 
 keepalivedmonitor_port : 64000
+
+hardened_services:
+  - docker
+  - haproxy
+  - kubelet
+  - kubelet_healthcheck
+  - mariadb
+  - nginx
+  - ntpd
+  - redis
