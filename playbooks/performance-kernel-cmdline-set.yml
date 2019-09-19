@@ -20,5 +20,6 @@
   hosts: base
   gather_facts: "{{ gather_facts | default(True) }}"
   max_fail_percentage: 20
+  strategy: linear
   roles:
     - role: "change_kernel_cmdline"

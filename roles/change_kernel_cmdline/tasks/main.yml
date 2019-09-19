@@ -24,6 +24,12 @@
 - debug:
     var: cpu_alloc
 
+- name: Get tuning option.
+  set_fact:
+    tuning: "{{ perf_profile['tuning'] | default('standard') }}"
+- debug:
+    var: tuning
+
 - name: Make combined CPU lists.
   set_fact:
     cpu_alloc: "{{ cpu_alloc | cpulist_combine(item['name'], item['lists']) }}"
@@ -57,6 +63,12 @@
     - { 'opt': 'rcu_nocbs',   'list': 'app' }
     - { 'opt': 'isolcpus',    'list': 'ovs_dpdk' }
   when: "item['list'] in cpu_alloc"
+
+- name: Make low latency kernel cmdline parameters.
+  set_fact:
+    kcmdline_default_list: "{{ kcmdline_default_list + perf_profile['low_latency_options'] | default([]) ] }}"
+  when:
+    - "tuning == 'low_latency'"
 
 - name: Make hugepage parameters.
   set_fact:
@@ -93,22 +105,34 @@
     name: network
     enabled: yes
 
+- name: Set reboot command
+  set_fact:
+    reboot_cmd: "( sleep 3 && /sbin/reboot & )"
+
 - name: Reboot node
-  shell: ( sleep 3 && /sbin/reboot & )
+  shell: "{{ reboot_cmd }}"
   async: 0
   poll: 0
   ignore_errors: yes
+  register: reboot_node
   when:
     - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
     - hostname != installation_controller
     - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
 
 - name: Wait for the server to reboot
-  local_action: wait_for host="{{ansible_host}}" delay=15 state=started port=22 connect_timeout=10 timeout=720
-  when:
-    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
-    - hostname != installation_controller
-    - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
+  wait_for:
+     host: "{{ansible_host}}"
+     port: 22
+     delay: 15
+     search_regex: OpenSSH
+     sleep: 5
+     timeout: 3600
+  connection: local
+  register: remote_success
+  until: remote_success is succeeded
+  retries: 3
+  when: reboot_node is changed
 
 - name: Wait for remote node ssh login. Wating for 10mins max.
   become: "{{ ansible_env.SUDO_USER }}"
@@ -118,10 +142,7 @@
   retries: 90
   delay: 10
   no_log: True
-  when:
-    - grub_cmdline.changed or grub_cmdline_default.changed or platform_affinity.changed
-    - hostname != installation_controller
-    - installation_phase != "postconfig-ended" or (scaled_out_nodes is defined and hostname in scaled_out_nodes) or (reinitialized_nodes is defined and hostname in reinitialized_nodes)
+  when: reboot_node is changed
 
 - name: Ensure directory for flag file
   file:
