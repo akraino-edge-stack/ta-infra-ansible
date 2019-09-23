@@ -25,6 +25,30 @@
     },
     {
       "key": {
+        "uuid": "1743a6b3_a1119809",
+        "filename": "roles/ntp-utils/library/change_master_servers.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 3,
+      "author": {
+        "id": 195
+      },
+      "writtenOn": "2019-09-23T15:42:59Z",
+      "side": 1,
+      "message": "fixed.",
+      "parentUuid": "8e213458_9ec6b911",
+      "range": {
+        "startLine": 3,
+        "startChar": 39,
+        "endLine": 3,
+        "endChar": 40
+      },
+      "revId": "a555e0e1024de52b97bbbc6c9f43e377315cda37",
+      "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "614868e2_32e6b681",
         "filename": "roles/ntp-utils/tasks/main.yml",
         "patchSetId": 1
@@ -36,6 +60,30 @@
       "writtenOn": "2019-09-23T15:23:32Z",
       "side": 1,
       "message": "I suggest prefixing this with ntp-check:",
+      "range": {
+        "startLine": 20,
+        "startChar": 25,
+        "endLine": 20,
+        "endChar": 31
+      },
+      "revId": "a555e0e1024de52b97bbbc6c9f43e377315cda37",
+      "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "91144011_41484f7e",
+        "filename": "roles/ntp-utils/tasks/main.yml",
+        "patchSetId": 1
+      },
+      "lineNbr": 20,
+      "author": {
+        "id": 195
+      },
+      "writtenOn": "2019-09-23T15:42:59Z",
+      "side": 1,
+      "message": "fixed.",
+      "parentUuid": "614868e2_32e6b681",
       "range": {
         "startLine": 20,
         "startChar": 25,
