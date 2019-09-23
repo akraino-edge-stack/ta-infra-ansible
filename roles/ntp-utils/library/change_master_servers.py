@@ -1,9 +1,7 @@
 #!/bin/env python
 # pylint: skip-file
-from ansible.module_utils.basic import *
-import os, json
-import re, sys
-import syslog
+from ansible.module_utils.basic import AnsibleModule
+import os
 import re
 
 if __name__ == '__main__':

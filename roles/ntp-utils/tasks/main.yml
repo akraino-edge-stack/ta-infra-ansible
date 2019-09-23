@@ -17,7 +17,7 @@
             /usr/bin/logger "ntp-check: Succeeded after $i iterations"
             exit 0
         fi
-        /usr/bin/logger "Failed, iteration $i"
+        /usr/bin/logger "ntp-check: Failed, iteration $i"
         /usr/bin/sleep 2
       done
 
@@ -34,4 +34,3 @@
   systemd:
       state: started
       name: ntpd
-      
