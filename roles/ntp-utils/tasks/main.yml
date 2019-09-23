@@ -1,0 +1,37 @@
+- name: Make sure ntpdate is enabled
+  systemd:
+      enabled: yes
+      name: ntpdate
+
+- name: Stop ntpd
+  systemd:
+      state: stopped
+      name: ntpd
+
+- name: Synchronize time with external ntp server
+  shell: |
+      /usr/bin/logger "ntp-check: Synchronizing time with external server"
+      for ((i=0; i<120; i++)); do
+        /usr/sbin/ntpdate {{ external_ntp_server }}
+        if [ $? -eq 0 ]; then
+            /usr/bin/logger "ntp-check: Succeeded after $i iterations"
+            exit 0
+        fi
+        /usr/bin/logger "Failed, iteration $i"
+        /usr/bin/sleep 2
+      done
+
+- name: Adjust the master ntpd server settings
+  change_master_servers:
+      new_ntp_servers: "{{modified_ntp_servers_list}}"
+  when: modified_ntp_servers_list is defined
+
+- name: Tune ntpd parameters
+  tune_master_server_params:
+      server_extra_params: "iburst minpoll 3"
+
+- name: Start ntpd
+  systemd:
+      state: started
+      name: ntpd
+      

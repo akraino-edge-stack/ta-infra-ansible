@@ -1,0 +1,16 @@
+# cmframework.requires: baremetal-interface-config.yml,ntp-config.yml
+---
+- name: Check ntpd on management nodes
+  hosts: management
+  vars:
+      external_ntp_server: '{{ time.ntp_servers[0] }}'
+  roles:
+      - ntp-utils
+
+- name: Check ntpd on other nodes
+  hosts: base:!management
+  vars:
+      external_ntp_server: '{{hostvars[installation_controller]["networking"]["infra_internal"]["ip"]}}'
+      modified_ntp_servers_list: '[{% for node in groups["management"] %}"{{hostvars[node]["networking"]["infra_internal"]["ip"]}}"{% if not loop.last %},{% endif %}{% endfor %}]'
+  roles:
+      - ntp-utils

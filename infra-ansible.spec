@@ -76,6 +76,7 @@ ln -sf %{_playbooks_path}/rpm-database.yml                   %{buildroot}/%{_pro
 ln -sf %{_playbooks_path}/single_node_storage.yml            %{buildroot}/%{_provisioning_path}
 ln -sf %{_playbooks_path}/ceph-deploy.yml                    %{buildroot}/%{_provisioning_path}
 ln -sf %{_playbooks_path}/baremetal-interface-config.yml     %{buildroot}/%{_provisioning_path}
+ln -sf %{_playbooks_path}/ntp-check.yml                      %{buildroot}/%{_provisioning_path}
 
 # Create links for the postconfig phase
 mkdir -p %{buildroot}/%{_postconfig_path}
