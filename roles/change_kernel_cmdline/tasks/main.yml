@@ -66,7 +66,7 @@
 
 - name: Make low latency kernel cmdline parameters.
   set_fact:
-    kcmdline_default_list: "{{ kcmdline_default_list + perf_profile['low_latency_options'] | default([]) ] }}"
+    kcmdline_default_list: "{{ kcmdline_default_list + perf_profile['low_latency_options'] | default([]) }}"
   when:
     - "tuning == 'low_latency'"
 
