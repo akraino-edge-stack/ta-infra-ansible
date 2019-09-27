@@ -156,6 +156,16 @@
 - name: "Direct root Logins Not Allowed"
   shell: echo > /etc/securetty
 
+- name: Change 'root' shell to nologin
+  user:
+    name: root
+    shell: /sbin/nologin
+
+- name: Lock 'root' password
+  user:
+    name: root
+    password: '!!'
+
 #
 # Configure IPv6
 #
