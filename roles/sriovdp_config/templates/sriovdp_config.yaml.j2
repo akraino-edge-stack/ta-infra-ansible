@@ -5,6 +5,8 @@ resourceList:
 {%       for pool in network_profiles[nprof].sriov_provider_networks %}
 {%         for iface in network_profiles[nprof].sriov_provider_networks[pool].interfaces %}
 - resourceName: "sriov_{{ iface }}"
+  selectors:
+    pfNames: [ "{{ iface }}" ]
   rootDevices: [ "{{ ifacepcimap[iface] }}" ]
   sriovMode: true
   deviceType: netdevice
