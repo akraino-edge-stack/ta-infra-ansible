@@ -116,6 +116,7 @@
     - cramfs
     - usb-storage
     - udf
+    - nfsd
 
 #
 # Disable interactive boot
@@ -343,6 +344,29 @@
     opts: "{{device_cur_mountoption.stdout}},noexec"
     state: "mounted"
     fstype: "{{device_fstype.stdout}}"
+
+#
+# Disable NFS service
+#
+
+- name: disable NFS related services
+  service:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  ignore_errors: yes
+  with_items:
+    - nfslock
+    - rpcgssd
+    - rpcidmapd
+    - nfs-idmap
+    - nfs-server
+    - nfs
+
+- name: remove nfs-utils package
+  yum:
+    name: nfs-utils
+    state: absent
 
 #
 # Setting file permissions
