@@ -1,3 +1,4 @@
+#jinja2: lstrip_blocks: True
 {#
 This file is written with conditional check and for loop based indentation.
 It improved code readability. The output json is not pretty. Run cat <output.json> | python -m json.tool
@@ -119,6 +120,7 @@ for pretty printing the same.
     {%- for route in routes %}
         {
             "ip_netmask": "{{ route.to }}", "next_hop": "{{ route.via }}"
+            {%- if route.table is defined %}, "table": "{{ route.table }}"{% endif %}
         } {% if not loop.last %},{% endif %}
     {%- endfor %}
     ]
@@ -257,6 +259,32 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- if 'routes' in value %}
                 {%- set routes = value['routes'] %}
             {%- endif %}
+            {%- if config_phase not in ('setup', 'bootstrapping') -%}
+                {% if 'gateway' in value %}
+                    {%- set caas_oam_gw =  value['gateway'] %}
+                {% else %}
+                    {# Fall back to most popular self IP as gateway #}
+                    {%- set caas_oam_gw =  value['cidr'] | ipaddr(1) | ipaddr('address') %}
+                {% endif %}
+                {%- set caas_oam_route = {
+                    "to": '0.0.0.0/0', "via": caas_oam_gw,
+                    "table": caas_oam_routing_table_name} %}
+                {%- if key == 'caas_oam' %}
+                    {%- set _ = routes.append(caas_oam_route) %}
+                {%- elif key == 'infra_internal' %}
+                    {% set bound_host_networks = [] %}
+                    {% for host_networks in (host_interface_net_mapping.keys() | map('extract', host_interface_net_mapping)| list) %}
+                        {% set _ = bound_host_networks.extend(host_networks) %}
+                    {% endfor %}
+                    {%- if 'caas_oam' not in bound_host_networks %}
+                        {%- set _ = routes.append(caas_oam_route) %}
+                    {%- endif %}
+                    {%- set caas_oam_internal_route = {
+                        "to": value['cidr'], "via": value['ip'],
+                        "table": caas_oam_routing_table_name} %}
+                    {%- set _ = routes.append(caas_oam_internal_route) %}
+                {% endif %}
+            {%- endif -%}
             {%- if key == 'infra_external' and 'gateway' in value %}
                 {%- if '.' in value['gateway'] %}
                     {% set defaultroute = '0.0.0.0/0'%}
@@ -287,6 +315,12 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- if routes %}
                 "routes": {{ add_static_routes(routes) }},
             {%- endif %}
+            {%- if config_phase not in ('setup', 'bootstrapping') -%}
+                "rules": [
+                    {"rule": "from {{ caas.oam_cidr }} lookup {{ caas_oam_routing_table_name }}"},
+                    {"rule": "to {{ caas.oam_cidr }} lookup main"}
+                ],
+            {%- endif -%}
             "use_dhcp": false
         }
         {%- endif %}{#- no dpdk or no cloud tenant -#}
@@ -477,6 +511,32 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                         {%- if 'routes' in value %}
                             {%- set routes = value['routes'] %}
                         {%- endif %}
+                        {%- if config_phase not in ('setup', 'bootstrapping') -%}
+                            {% if 'gateway' in value %}
+                                {%- set caas_oam_gw =  value['gateway'] %}
+                            {% else %}
+                                {# Fall back to most popular self IP as gateway #}
+                                {%- set caas_oam_gw =  value['cidr'] | ipaddr(1) | ipaddr('address') %}
+                            {% endif %}
+                            {%- set caas_oam_route = {
+                                "to": '0.0.0.0/0', "via": caas_oam_gw,
+                                "table": caas_oam_routing_table_name} %}
+                            {%- if key == 'caas_oam' %}
+                                {%- set _ = routes.append(caas_oam_route) %}
+                            {%- elif key == 'infra_internal' %}
+                                {% set bound_host_networks = [] %}
+                                {% for host_networks in (host_interface_net_mapping.keys() | map('extract', host_interface_net_mapping)| list) %}
+                                    {% set _ = bound_host_networks.extend(host_networks) %}
+                                {% endfor %}
+                                {%- if 'caas_oam' not in bound_host_networks %}
+                                    {%- set _ = routes.append(caas_oam_route) %}
+                                {%- endif %}
+                                {%- set caas_oam_internal_route = {
+                                    "to": value['cidr'], "via": value['ip'],
+                                    "table": caas_oam_routing_table_name} %}
+                                {%- set _ = routes.append(caas_oam_internal_route) %}
+                            {% endif %}
+                        {%- endif -%}
                         {%- if key == 'infra_external' and 'gateway' in value %}
                             {%- if '.' in value['gateway'] %}
                                 {% set defaultroute = '0.0.0.0/0'%}
@@ -507,6 +567,12 @@ Otherwise it gets configured normally on infra iface configuration in the next l
                         {%- if routes %}
                             "routes": {{ add_static_routes(routes) }},
                         {%- endif %}
+                        {%- if config_phase not in ('setup', 'bootstrapping') -%}
+                            "rules": [
+                                {"rule": "from {{ caas.oam_cidr }} lookup {{ caas_oam_routing_table_name }}"},
+                                {"rule": "to {{ caas.oam_cidr }} lookup main"}
+                            ],
+                        {%- endif -%}
                         "use_dhcp": false
                         }
                     {%- endif %}
@@ -581,5 +647,13 @@ Otherwise it gets configured normally on infra iface configuration in the next l
         {%- endif %}
     {%- endfor %}
 {%- endif %}{#- if config_phase != 'setup' -#}
+{%- if config_phase not in ('setup', 'bootstrapping') %}
+            ,
+            {
+                "name": "{{ caas_oam_routing_table_name }}",
+                "type": "route_table",
+                "table_id": {{ caas_oam_routing_table_id }}
+            }
+{%- endif %}
 ]
 }
