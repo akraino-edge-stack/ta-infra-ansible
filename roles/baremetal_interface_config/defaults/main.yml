@@ -16,3 +16,4 @@
 
 debug: True
 provider_network_type: []
+caas_oam_routing_table: 66

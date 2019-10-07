@@ -1,3 +1,4 @@
+#jinja2: lstrip_blocks: True
 {#
 This file is written with conditional check and for loop based indentation.
 It improved code readability. The output json is not pretty. Run cat <output.json> | python -m json.tool
@@ -119,6 +120,7 @@ for pretty printing the same.
     {%- for route in routes %}
         {
             "ip_netmask": "{{ route.to }}", "next_hop": "{{ route.via }}"
+            {%- if route.table is defined %}, "table": "{{ route.table }}"{% endif %}
         } {% if not loop.last %},{% endif %}
     {%- endfor %}
     ]
@@ -257,6 +259,13 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- if 'routes' in value %}
                 {%- set routes = value['routes'] %}
             {%- endif %}
+            {%- if key == 'caas_oam' -%}
+                {% if 'gateway' in value %}
+                    {%- set caas_oam_gw = {"to": '0.0.0.0/0', "via": value['gateway'],
+                                           "table": caas_oam_routing_table} %}
+                    {%- set _ = routes.append(caas_oam_gw) %}
+                {%- endif %}
+            {%- endif -%}
             {%- if key == 'infra_external' and 'gateway' in value %}
                 {%- if '.' in value['gateway'] %}
                     {% set defaultroute = '0.0.0.0/0'%}
@@ -287,6 +296,12 @@ Otherwise it gets configured normally on infra iface configuration in the next l
             {%- if routes %}
                 "routes": {{ add_static_routes(routes) }},
             {%- endif %}
+            {%- if key == 'caas_oam' -%}
+                "rules": [
+                    {"rule": "from {{ caas.oam_cidr }} lookup {{ caas_oam_routing_table }}"},
+                    {"rule": "to {{ caas.oam_cidr }} lookup main"}
+                ],
+            {%- endif -%}
             "use_dhcp": false
         }
         {%- endif %}{#- no dpdk or no cloud tenant -#}
@@ -581,5 +596,13 @@ Otherwise it gets configured normally on infra iface configuration in the next l
         {%- endif %}
     {%- endfor %}
 {%- endif %}{#- if config_phase != 'setup' -#}
+{%- if host_networking['caas_oam'] is defined %}
+            ,
+            {
+                "name": "caas_oam",
+                "type": "route_table",
+                "table_id": {{ caas_oam_routing_table }}
+            }
+{%- endif %}
 ]
 }
