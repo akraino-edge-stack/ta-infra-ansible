@@ -1,0 +1,7 @@
+Code-Review+2: Levente Kálé <levente.kale@nokia.com>
+Verified+1: Akraino Jobbuilder <collab-it+akraino-jobbuilder@linuxfoundation.org>
+Submitted-by: Krisztián Lengyel <krisztian.lengyel@nokia.com>
+Submitted-at: Fri, 18 Oct 2019 13:58:40 +0000
+Reviewed-on: https://gerrit.akraino.org/r/c/ta/infra-ansible/+/1744
+Project: ta/infra-ansible
+Branch: refs/heads/master
