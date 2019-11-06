@@ -67,6 +67,52 @@
     line: 'PASS_MIN_DAYS   0'
 
 #
+# Linux Failed password attempts
+#
+
+- name: "Set Deny for failed password attempts 1"
+  lineinfile:
+    path: "{{item}}"
+    insertbefore: '^auth[\s]*sufficient[\s]*pam_unix.so'
+    line: 'auth        required      pam_faillock.so preauth silent audit deny=3 unlock_time=3600 fail_interval=900'
+  with_items:
+    - /etc/pam.d/system-auth-ac
+    - /etc/pam.d/password-auth-ac
+  tags:
+    - REC-443
+
+- name: "Set Deny for failed password attempts 2"
+  lineinfile:
+    path: "{{item}}"
+    insertafter: '^auth[\s]*sufficient[\s]*pam_unix.so'
+    line: 'auth        [default=die]  pam_faillock.so authfail audit deny=3 unlock_time=3600 fail_interval=900'
+  with_items:
+    - /etc/pam.d/system-auth-ac
+    - /etc/pam.d/password-auth-ac
+  tags:
+    - REC-443
+
+- name: "Set Deny for failed password attempts 3"
+  lineinfile:
+    path: "{{item}}"
+    insertbefore: '^account[\s]*required[\s]*pam_unix.so'
+    line: 'account     required      pam_faillock.so'
+  with_items:
+    - /etc/pam.d/system-auth-ac
+    - /etc/pam.d/password-auth-ac
+  tags:
+    - REC-443
+
+- name: "Set Account expiration following inactivity"
+  lineinfile:
+    create: yes
+    path: "/etc/default/useradd"
+    regexp: "^INACTIVE"
+    line: "INACTIVE=35"
+  tags:
+    - REC-443
+
+#
 # YUM config
 #
 

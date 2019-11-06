@@ -24,7 +24,7 @@
 
 - name: "remove the old public ssh key"
   file:
-    path: /home/{{ item.name }}/.ssh/{{ item.name }}
+    path: /home/{{ item.name }}/.ssh/authorized_keys
     state: absent
   with_items: "{{ linuxuser | default([]) }}"
 
@@ -41,7 +41,7 @@
 - name: "add a new public ssh key"
   when: item.state == 'present' and item.public_key != ""
   lineinfile:
-    path: /home/{{ item.name }}/.ssh/{{ item.name }}
+    path: /home/{{ item.name }}/.ssh/authorized_keys
     create: yes
     regexp: '.*'
     state: "{{ item.state | default('absent') }}"

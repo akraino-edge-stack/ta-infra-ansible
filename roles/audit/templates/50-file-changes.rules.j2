@@ -1,11 +1,13 @@
 ## file changes
+-w /opt/nokia/bin/hostcli -p aw -k hostcli
+-w /usr/bin/openstack -p aw -k openstackcli
 -w /boot/ -p rwxa -k dir_boot
 -w /opt/ -p aw -k dir_opt
 -w /etc/ -p rwa -k dir_etc
--w /usr/bin -p aw -k usr-bin
--w /usr/sbin -p aw -k usr-sbin
+-w /usr/bin -p rwxa -k usr-bin
+-w /usr/sbin -p rwxa -k usr-sbin
 -w /usr/libexec -p aw -k usr-libexex
--w /usr/local -p rwxa -k usr-local
+-w /usr/local -p awx -k usr-local
 -w /mnt/symptomreport/ -p awr -k symptomreport
 -w /usr/lib -p aw -k usr-lib
 -w /usr/lib64 -p aw -k usr-lib64
