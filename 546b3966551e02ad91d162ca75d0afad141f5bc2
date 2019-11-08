@@ -1,0 +1,8 @@
+Verified+1: Akraino Jobbuilder <collab-it+akraino-jobbuilder@linuxfoundation.org>
+Code-Review+1: Krisztián Lengyel <krisztian.lengyel@nokia.com>
+Code-Review+2: Ferenc Argay <ferenc.argay@nokia.com>
+Submitted-by: Ferenc Argay <ferenc.argay@nokia.com>
+Submitted-at: Fri, 08 Nov 2019 14:54:06 +0000
+Reviewed-on: https://gerrit.akraino.org/r/c/ta/infra-ansible/+/1927
+Project: ta/infra-ansible
+Branch: refs/heads/master
