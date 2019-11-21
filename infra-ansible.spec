@@ -15,7 +15,7 @@
 
 Name:           infra-ansible
 Version:        %{_version}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        Contains ansible playbook and roles for Akraino rec blueprint
 License:        %{_platform_licence}
 Source0:        %{name}-%{version}.tar.gz
@@ -152,6 +152,10 @@ cp systemd/sriov.sh %{buildroot}/opt/sriov
 %post
 for role in /usr/share/ceph-ansible/roles/*; do
   ln -sf $role /etc/ansible/roles/
+done
+mkdir -p /etc/ansible/roles/plugins/library
+for module in /usr/share/ceph-ansible/library/*.py*; do
+  ln -sf $module /etc/ansible/roles/plugins/library
 done
 systemctl enable sriov
 
