@@ -43,8 +43,27 @@
 - name: Remove interface configuration which use dhcp
   shell: rm -f $(grep -li BOOTPROTO.*dhcp /etc/sysconfig/network-scripts/ifcfg-* | sort -u)
 
+- name : Get system disk info
+  parted:
+    device: "{{root_disk}}"
+    unit: GB
+  register: root_disk_info
+
+- debug:
+    msg: "root_disk_info: {{root_disk_info}}"
+
 - set_fact:
-    root_disk_part1: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{first_part_number}}{% else %}{{root_disk}}-part{{first_part_number}}{% endif %}"
+    sys_part: "{{ root_disk_info.partitions | selectattr('num', 'equalto', 1) | first }}"
+    sys_part_number: 1
+  when: root_disk_info.disk.table == "msdos"
+
+- set_fact:
+    sys_part: "{{ root_disk_info.partitions | selectattr('num', 'equalto', 3) | first }}"
+    sys_part_number: 3
+  when: root_disk_info.disk.table == "gpt"
+
+- debug:
+    msg: "sys_part = {{root_disk}}{{sys_part_number}}: {{sys_part}}"
 
 - name: get volume pools
   shell: dmsetup ls | awk '{print $1}'
@@ -81,37 +100,20 @@
 - name: delete temporary partition
   parted:
     device: "{{root_disk}}"
-    number: "{{delete_partition}}"
+    number: "{{ sys_part_number|int + 1 }}"
     state: absent
   when: delete_partition is defined
-
-- name: system disk total size
-  shell: parted {{root_disk}} unit GB print | grep "Disk /dev/" | awk '{print $3}' | tr -d 'a-z,A-Z'
-  register: root_disk_total_size
-
-- debug:
-    msg: "root_disk_total_size.stdout {{ root_disk_total_size.stdout }}"
 
 - name: configure root volume groups
   include: root_disk_volume_groups.yml
   vars:
-    part_start: "{{second_part_start}}GiB"
-    part_end: "{{second_part_end}}GB"
-    phy_disk_part_number: 2
     create_disk_part: True
-
-- name: system disk first partition size
-  shell: parted {{root_disk_part1}} unit GB print | grep "Disk /dev/" | awk '{print $3}' | tr -d 'a-z,A-Z'
-  register: first_part
-
-- debug:
-     msg: "first_part.stdout {{ first_part.stdout }}"
 
 - name: configure instance disk partition
   parted:
     device: "{{root_disk}}"
-    number: 3
-    part_start: "{{third_part_start}}GB"
+    number: "{{instance_part_number}}"
+    part_start: "{{instance_part_start}}GB"
     flags: [ lvm ]
     state: present
   when: rootdisk_vg_percentage != all_disk_size_for_volume_group_vg
