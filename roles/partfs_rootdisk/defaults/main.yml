@@ -20,11 +20,12 @@ debug: False
 root_disk: "{{ by_path_disks['os'] }}"
 all_disk_size_for_volume_group_vg: "1"
 
-first_part_size: 50
-second_part_percentage: "{{ rootdisk_vg_percentage }}"
-root_disk_left_size: "{{ root_disk_total_size.stdout | int - first_part_size | int }}"
-second_part_size: "{{ root_disk_left_size | float * second_part_percentage | float  }}"
+root_disk_free_size: "{{ root_disk_info.disk.size | float - sys_part.end | float }}"
+lvm_part_size: "{{ root_disk_free_size | float * rootdisk_vg_percentage | float  }}"
 
-second_part_start: "{{ first_part_size }}"
-second_part_end: "{{first_part_size | int + second_part_size | int }}"
-third_part_start: "{{ second_part_end }}"
+lvm_part_number: "{{ sys_part_number|int + 1 }}"
+lvm_part_start: "{{ sys_part.end }}"
+lvm_part_end: "{{ lvm_part_start | float + lvm_part_size | float }}"
+
+instance_part_number: "{{ sys_part_number|int + 2 }}"
+instance_part_start: "{{ lvm_part_end }}"

@@ -40,28 +40,19 @@
 - name: Create Partition for LVMs
   parted:
     device: "{{root_disk}}"
-    number: "{{phy_disk_part_number}}"
+    number: "{{lvm_part_number}}"
+    unit: "GB"
+    label: "{{root_disk_info.disk.table}}"
+    name: lvm
     flags: [ lvm ]
     state: present
-    part_start: "{{part_start}}"
-    part_end: "{{part_end}}"
+    part_start: "{{lvm_part_start}}GB"
+    part_end: "{{lvm_part_end}}GB"
   when:
     - create_disk_part | bool
-    - rootdisk_vg_percentage != all_disk_size_for_volume_group_vg
-
-- name: Create Partition for LVMs
-  parted:
-    device: "{{root_disk}}"
-    number: "{{phy_disk_part_number}}"
-    flags: [ lvm ]
-    state: present
-    part_start: "{{part_start}}"
-  when:
-    - create_disk_part | bool
-    - rootdisk_vg_percentage == all_disk_size_for_volume_group_vg
 
 - set_fact:
-    vg_disk: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{phy_disk_part_number}}{% else %}{{root_disk}}-part{{phy_disk_part_number}}{% endif %}"
+    vg_disk: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{lvm_part_number}}{% else %}{{root_disk}}-part{{lvm_part_number}}{% endif %}"
 
 - debug:
     msg: "{{vg_disk}}"
