@@ -15,10 +15,10 @@
 # limitations under the License.
 
 - set_fact:
-    root_disk_part3: "{% if root_disk == default_rootdisk_device %}{{root_disk}}3{% else %}{{root_disk}}-part3{% endif %}"
+    instance_disk_part: "{% if root_disk == default_rootdisk_device %}{{root_disk}}{{instance_part_number}}{% else %}{{root_disk}}-part{{instance_part_number}}{% endif %}"
 
 - debug:
-    msg: "root disk part3: {{ root_disk_part3 }}"
+    msg: "instance partition: {{ instance_disk_part }}"
 
 - name: get volume pools
   shell: dmsetup ls | awk '/volumes/ {print $1}'
@@ -64,7 +64,7 @@
     - item != "VG"
 
 - name: remove physical volume (if any)
-  shell: pvremove {{ root_disk_part3 }}
+  shell: pvremove {{ instance_disk_part }}
   ignore_errors: yes
 
 - name: get volume groups
