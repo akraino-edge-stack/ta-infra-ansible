@@ -96,9 +96,20 @@
     line: "GRUB_CMDLINE_LINUX_DEFAULT='{{ kcmdline_default_list | list_to_cmdline }}'"
   register: grub_cmdline_default
 
+- name: Check whether grub-efi exists
+  stat:
+    path: /boot/efi/EFI/centos/grub.cfg
+  register: grub_efi_file_stat
+
 - name: Generate grub configurations
   command: grub2-mkconfig -o /boot/grub2/grub.cfg
   when: grub_cmdline.changed or grub_cmdline_default.changed
+
+- name: Generate grub-efi configurations
+  command: grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg
+  when:
+    - grub_cmdline.changed or grub_cmdline_default.changed
+    - grub_efi_file_stat.stat.exists == true
 
 - name: Ensure network.service is enabled
   systemd:
