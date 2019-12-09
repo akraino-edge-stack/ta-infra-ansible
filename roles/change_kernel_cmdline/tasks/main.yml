@@ -97,7 +97,7 @@
   register: grub_cmdline_default
 
 - name: Generate grub configurations
-  command: grub2-mkconfig -o /boot/grub2/grub.cfg
+  command: test -e /boot/grub2/grub.cfg && /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg || /usr/sbin/grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg
   when: grub_cmdline.changed or grub_cmdline_default.changed
 
 - name: Ensure network.service is enabled

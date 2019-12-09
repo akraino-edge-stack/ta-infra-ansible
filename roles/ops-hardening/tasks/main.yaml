@@ -362,7 +362,7 @@
 
 - name: generate grub config
   when: grub2_pass is defined and grub2_pass != 'Empty'
-  command: /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+  command: test -e /boot/grub2/grub.cfg && /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg || /usr/sbin/grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg
 
 #
 #Setting the noexec option to the /dev/shm mount dir
