@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Common kernel arguments.
-kcmdline_list: ['console=tty0', 'console=ttyS1,115200', 'no_timer_check', 'audit=1']
+kcmdline_list: ['console=tty0', 'console=ttyS1,115200', 'console=ttyAMA0,115200', 'no_timer_check', 'audit=1']
 
 # Default kernel arguments.
 kcmdline_default_list: ['nofb', 'nomodeset', 'vga=normal', 'iommu=pt', 'intel_iommu=on', 'crashkernel=256M']

@@ -186,15 +186,23 @@
 # Set file permissions
 #
 
-- name: "Set set the 600 file permissions"
-  file:
-    path: "{{item}}"
-    state: touch
-    mode: 600
+- name: "Check files exist to determine the proper location of grub.cfg on UEFI systems"
+  stat: path={{item}}
   with_items:
+    - /boot/efi/EFI/centos/grub.cfg
     - /boot/grub2/grub.cfg
     - /var/log/boot.log
     - /var/log/cron
+  register: file_stat
+
+- name: "Set the 600 file permissions"
+  file:
+    path: "{{item.item}}"
+    state: touch
+    mode: "600"
+  with_items: "{{ file_stat.results }}"
+  when:
+    - item.stat.exists == true
 
 #
 # Disable direct root login
@@ -360,9 +368,20 @@
       #define users
       password_pbkdf2 root "{{ grub2_pass }}"
 
+- name: check whether grub-efi exists
+  stat:
+    path: /boot/efi/EFI/centos/grub.cfg
+  register: grub_efi_file_stat
+
 - name: generate grub config
   when: grub2_pass is defined and grub2_pass != 'Empty'
   command: /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+
+- name: generate grub-efi config
+  command: /usr/sbin/grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg
+  when:
+    - grub2_pass is defined and grub2_pass != 'Empty'
+    - grub_efi_file_stat.stat.exists == true
 
 #
 #Setting the noexec option to the /dev/shm mount dir
