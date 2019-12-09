@@ -1,4 +1,4 @@
----
+u--
 
 # Copyright 2019 Nokia
 
@@ -186,15 +186,23 @@
 # Set file permissions
 #
 
-- name: "Set set the 600 file permissions"
-  file:
-    path: "{{item}}"
-    state: touch
-    mode: 600
+- name: "Check files exist to determine the proper location of grub.cfg on UEFI systems"
+  stat: path={{item}}
   with_items:
+    - /boot/efi/EFI/centos/grub.cfg
     - /boot/grub2/grub.cfg
     - /var/log/boot.log
     - /var/log/cron
+  register: file_stat
+
+- name: "Set the 600 file permissions"
+  file:
+    path: "{{item.item}}"
+    state: touch
+    mode: 600
+  with_items: "{{ file_stat.results }}"
+  when:
+    - item.stat.exists == true
 
 #
 # Disable direct root login
@@ -362,7 +370,7 @@
 
 - name: generate grub config
   when: grub2_pass is defined and grub2_pass != 'Empty'
-  command: /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg
+  shell: test -e /boot/grub2/grub.cfg && /usr/sbin/grub2-mkconfig -o /boot/grub2/grub.cfg || /usr/sbin/grub2-mkconfig -o /boot/efi/EFI/centos/grub.cfg
 
 #
 #Setting the noexec option to the /dev/shm mount dir
