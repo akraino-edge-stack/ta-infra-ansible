@@ -14,20 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+- name: check whether disks exist and are block devices
+  stat: path={{ item }}
+  with_items: "{{ disks }}"
+  register: disks_stat
+
 - name: wipe off filesystems from disks
-  shell: "[ -b {{ item }} ] | /usr/sbin/wipefs --all --force {{ item }} || /usr/sbin/wipefs --all --force {{ item }}"
+  command: "/usr/sbin/wipefs --all --force {{ item.item }}"
   args:
     creates: "{{ creates_file }}"
-  with_items: "{{ disks }}"
+  with_items: "{{ disks_stat.results }}"
+  when: item.stat.exists and item.stat.isblk
 
 - name: destroy data from disks
-  shell: "[ -b {{ item }} ] | dd if=/dev/zero of={{ item }} count=200 bs=1M"
+  command: "dd if=/dev/zero of={{ item.item }} count=200 bs=1M"
   args:
     creates: "{{ creates_file }}"
-  with_items: "{{ disks }}"
+  with_items: "{{ disks_stat.results }}"
+  when: item.stat.exists and item.stat.isblk
 
 - name: destroy partitions from disks
-  shell: "[ -b {{ item }} ] | /usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item }} || /usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item }}"
+  command: "/usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item.item }}"
   args:
     creates: "{{ creates_file }}"
-  with_items: "{{ disks }}"
+  with_items: "{{ disks_stat.results }}"
+  when: item.stat.exists and item.stat.isblk
