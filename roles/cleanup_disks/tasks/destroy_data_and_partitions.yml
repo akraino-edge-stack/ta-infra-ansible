@@ -15,19 +15,19 @@
 # limitations under the License.
 
 - name: wipe off filesystems from disks
-  shell: "[ -b {{ item }} ] | /usr/sbin/wipefs --all --force {{ item }} || /usr/sbin/wipefs --all --force {{ item }}"
+  shell: "if [ -b {{ item }} ]; then /usr/sbin/wipefs --all --force {{ item }}; fi"
   args:
     creates: "{{ creates_file }}"
   with_items: "{{ disks }}"
 
 - name: destroy data from disks
-  shell: "[ -b {{ item }} ] | dd if=/dev/zero of={{ item }} count=200 bs=1M"
+  shell: "if [ -b {{ item }} ]; then dd if=/dev/zero of={{ item }} count=200 bs=1M; fi"
   args:
     creates: "{{ creates_file }}"
   with_items: "{{ disks }}"
 
 - name: destroy partitions from disks
-  shell: "[ -b {{ item }} ] | /usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item }} || /usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item }}"
+  shell: "if [ -b {{ item }} ]; then /usr/sbin/sgdisk --zap-all --clear --mbrtogpt -- {{ item }}; fi"
   args:
     creates: "{{ creates_file }}"
   with_items: "{{ disks }}"
