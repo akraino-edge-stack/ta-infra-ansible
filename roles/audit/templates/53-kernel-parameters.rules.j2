@@ -1,3 +1,5 @@
 ## reading kernel parameters
+{% if ansible_architecture not in ['aarch64'] %}
 -a always,exit -F arch=b32 -S _sysctl -F key=32bit__sysctl
 -a always,exit -F arch=b64 -S _sysctl -F key=64bit__sysctl
+{% endif %}
