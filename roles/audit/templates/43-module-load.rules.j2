@@ -1,6 +1,13 @@
 ## These rules watch for kernel module insertion
+{%- set S_create_module = '-S create_module' %}
+{%- set S_kexec_file_load = '-S kexec_file_load' %}
+{# Filter syscalls not available on certain platforms #}
+{% if ansible_architecture in ['aarch64'] %}
+    {%- set S_create_module = '' %}
+    {%- set S_kexec_file_load = '' %}
+{% endif %}
 -w /usr/sbin/insmod -p x -k modules
 -w /usr/sbin/rmmod -p x -k modules
 -w /usr/sbin/modprobe -p x -k modules
--a always,exit -F arch=b64 -S init_module -S delete_module -S create_module -S finit_module -S kexec_file_load -S kexec_load -k modules
--a always,exit -F arch=b32 -S init_module -S delete_module -S create_module -S finit_module -k modules
+-a always,exit -F arch=b64 -S init_module -S delete_module {{ S_create_module }} -S finit_module {{ S_kexec_file_load }} -S kexec_load -k modules
+-a always,exit -F arch=b32 -S init_module -S delete_module {{ S_create_module }} -S finit_module -k modules

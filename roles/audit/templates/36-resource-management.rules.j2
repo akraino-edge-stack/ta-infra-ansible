@@ -1,6 +1,8 @@
 ## resource management
+{% if ansible_architecture not in ['aarch64'] %}
 -a always,exit -F arch=b32 -S modify_ldt -F key=32bit_modify_ldt
 -a always,exit -F arch=b64 -S modify_ldt -F key=64bit_modify_ldt
+{% endif %}
 -a always,exit -F arch=b32 -S move_pages -F key=32bit_move_pages
 -a always,exit -F arch=b64 -S move_pages -F key=64bit_move_pages
 -a always,exit -F arch=b32 -S set_mempolicy -F key=32bit_set_mempolicy
