@@ -22,8 +22,10 @@
 -a always,exit -F arch=b64 -S prlimit64 -F key=64bit_prlimit64
 -a always,exit -F arch=b32 -S unshare -F key=32bit_unshare
 -a always,exit -F arch=b64 -S unshare -F key=64bit_unshare
+{%- if ansible_architecture not in ['aarch64'] %}
 -a always,exit -F arch=b32 -S set_thread_area -F key=32bit_set_thread_area
 -a always,exit -F arch=b64 -S set_thread_area -F key=64bit_set_thread_area
+{%- endif %}
 -a always,exit -F arch=b32 -S sched_setattr -F key=32bit_sched_setattr
 -a always,exit -F arch=b64 -S sched_setattr -F key=64bit_sched_setattr
 -a always,exit -F arch=b32 -S pivot_root -F key=32bit_pivot_root
