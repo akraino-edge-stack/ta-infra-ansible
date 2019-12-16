@@ -13,11 +13,15 @@
 -w /usr/lib64 -p aw -k usr-lib64
 -w /var/log/audit/ -k audit-logs
 -w /var/log/sudo.log -p wa -k actions
+{%- if ansible_architecture not in ['aarch64'] %}
 -a always,exit -F arch=b64 -S epoll_wait_old -F key=64bit_epoll_wait_old
+{%- endif %}
 -a always,exit -F arch=b32 -S inotify_add_watch -F key=32bit_inotify_add_watch
 -a always,exit -F arch=b64 -S inotify_add_watch -F key=64bit_inotify_add_watch
+{%- if ansible_architecture not in ['aarch64'] %}
 -a always,exit -F arch=b32 -S inotify_init -F key=32bit_inotify_init
 -a always,exit -F arch=b64 -S inotify_init -F key=64bit_inotify_init
+{%- endif %}
 -a always,exit -F arch=b32 -S inotify_init1 -F key=32bit_inotify_init1
 -a always,exit -F arch=b64 -S inotify_init1 -F key=64bit_inotify_init1
 -a always,exit -F arch=b32 -S inotify_rm_watch -F key=32bit_inotify_rm_watch
