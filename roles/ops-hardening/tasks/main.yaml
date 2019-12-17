@@ -69,6 +69,14 @@
 #
 # Linux Failed password attempts
 #
+- name: "Ensure authconfig is properly configured."
+  command: authconfig --updateall
+  with_items:
+    - /etc/pam.d/system-auth-ac
+    - /etc/pam.d/password-auth-ac
+  when: not (item|exists and item|is_file)
+  tags:
+    - REC-443
 
 - name: "Set Deny for failed password attempts 1"
   lineinfile:
