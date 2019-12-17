@@ -22,6 +22,30 @@
       "revId": "93c6bce2dd5d1f67f52ef732f9b7c66da4189a3d",
       "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
       "unresolved": true
+    },
+    {
+      "key": {
+        "uuid": "049d595a_95402f38",
+        "filename": "roles/ops-hardening/tasks/main.yaml",
+        "patchSetId": 1
+      },
+      "lineNbr": 22,
+      "author": {
+        "id": 251
+      },
+      "writtenOn": "2019-12-17T12:24:30Z",
+      "side": 1,
+      "message": "Ack",
+      "parentUuid": "ffb18d22_8279a963",
+      "range": {
+        "startLine": 22,
+        "startChar": 11,
+        "endLine": 22,
+        "endChar": 33
+      },
+      "revId": "93c6bce2dd5d1f67f52ef732f9b7c66da4189a3d",
+      "serverId": "4cada01b-0314-4fe0-84a1-f9ddc89863f9",
+      "unresolved": false
     }
   ]
 }
