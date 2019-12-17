@@ -18,6 +18,9 @@
 # Linux password hardening
 #
 
+- name: "Ensure authconfig is properly configured."
+  command: authconfig --updateall
+
 - name: "Set Password Strength Minimum Digit Characters."
   lineinfile:
     path: /etc/security/pwquality.conf
