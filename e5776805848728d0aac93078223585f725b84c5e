@@ -1,0 +1,10 @@
+Verified+1: Akraino Jobbuilder <collab-it+akraino-jobbuilder@linuxfoundation.org>
+Code-Review+1: Alexandru Avadanii <Alexandru.Avadanii@enea.com>
+Code-Review+1: Cristina Pauna <cristina.pauna@enea.com>
+Code-Review+1: Valentin Radulescu <valentin.radulescu@enea.com>
+Code-Review+2: Krisztián Lengyel <krisztian.lengyel@nokia.com>
+Submitted-by: Krisztián Lengyel <krisztian.lengyel@nokia.com>
+Submitted-at: Thu, 19 Dec 2019 13:33:38 +0000
+Reviewed-on: https://gerrit.akraino.org/r/c/ta/infra-ansible/+/2134
+Project: ta/infra-ansible
+Branch: refs/heads/master
