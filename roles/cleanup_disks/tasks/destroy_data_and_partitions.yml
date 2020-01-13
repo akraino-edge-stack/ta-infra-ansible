@@ -15,7 +15,7 @@
 # limitations under the License.
 
 - name: check whether disks exist and are block devices
-  stat: path={{ item }}
+  stat: path={{ item }} follow=true
   with_items: "{{ disks }}"
   register: disks_stat
 
