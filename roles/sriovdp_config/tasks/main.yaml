@@ -15,7 +15,7 @@
 # limitations under the License.
 
 - name: collect network device PCI addresses
-  shell: dpdk-devbind --status-dev net | grep "^0000.*if=en"
+  shell: dpdk-devbind --status-dev net | egrep "^[0-9a-fA-F]{4}\b.*if=" || true
   register: devbind
 
 - set_fact:
@@ -23,7 +23,7 @@
     iface: []
 
 - set_fact:
-    pci: "{{ pci }} + {{ [ item.split()[0][5:12] ] }}"
+    pci: "{{ pci }} + {{ [ item.split()[0][:12] ] }}"
     iface: "{{ iface }} + {{ [ item.split(' if=')[1].split()[0] ] }}"
   with_items: "{{ devbind.stdout_lines }}"
 
