@@ -17,22 +17,32 @@
 # This tool is meant to stop processes running in a given directory.
 # Evacuate its contents to a temp location.
 # Mount a given LVM to the Directory
+# optionally change ownership of the root of the LVM
 # Start those services again
 
 #arg1: Directory to evacuate
 #arg2: Volume dev path to mount
+#arg3/arg4 (optional, must provide both): owner/group of root directory of new mount
 
 exec >> /tmp/vol_mgmt_logfile
 exec 2>&1
 
-
-if [[ $# != 2 ]];then
+if [[ $# == 4 ]];then
+  evac_dir=$1
+  mount_vol_dev=$2
+  owner=$3
+  group=$4
+elif [[ $# == 2 ]]; then
+  evac_dir=$1
+  mount_vol_dev=$2
+  # they didn't provide a u/g.  use the owner of the mountpoint if
+  # it exists or our own user/group (almost certaimly root) if not.
+  owner=`stat -c '%U' ${evac_dir} 2>/dev/null || id -un`
+  group=`stat -c '%G' ${evac_dir} 2>/dev/null || id -gn`
+else
   echo "Improper number of arguments passed!!"
   exit 1
 fi
-
-evac_dir=$1
-mount_vol_dev=$2
 
 echo "Trying to mount $mount_vol_dev on $evac_dir"
 
@@ -103,6 +113,8 @@ rm -rf ${evac_dir}/*
 
 # Mount the volume on dir
 mount $evac_dir
+
+chown ${owner}:${group} ${evac_dir}
 
 cp -rpf $tmp_dir/* ${evac_dir}/
 rm -rf $tmp_dir
