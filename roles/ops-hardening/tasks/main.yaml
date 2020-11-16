@@ -66,6 +66,18 @@
     regexp: '^PASS_MIN_DAYS[\s]*[0-9]*$'
     line: 'PASS_MIN_DAYS   0'
 
+- name: "Set password hash to SHA512"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^ENCRYPT_METHOD[\s]*[a-z0-9]*$'
+    line: 'ENCRYPT_METHOD   SHA512'
+
+- name: "Set minimum number of password hash rounds"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^SHA_CRYPT_MIN_ROUNDS[\s]*[0-9]*$'
+    line: 'SHA_CRYPT_MIN_ROUNDS   5000'
+
 #
 # Linux Failed password attempts
 #
@@ -299,6 +311,7 @@
     - { name: 'kernel.core_uses_pid', value: 1 }
     - { name: 'kernel.randomize_va_space', value: 2 }
     - { name: 'kernel.core_pattern', value: '/var/core/core'}
+    - { name: 'kernel.kptr_restrict', value: 2 }
 
 #
 # Configure core dump

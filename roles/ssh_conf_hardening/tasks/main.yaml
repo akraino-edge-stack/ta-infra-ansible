@@ -62,7 +62,7 @@
 - name: User Alive Interval setting
   ssh_conf:
     regexp: '[\s]*ClientAliveInterval'
-    values: "ClientAliveInterval 900\n"
+    values: "ClientAliveInterval 300\n"
 
 - name: Disable the X11forwarding
   ssh_conf:
@@ -107,12 +107,22 @@
 - name: MaxAuthTries setting
   ssh_conf:
     regexp: '[\s]*MaxAuthTries'
-    values: "MaxAuthTries 6\n"
+    values: "MaxAuthTries 3\n"
+
+- name: "Limit interactive session count to 2"
+  ssh_conf:
+    regexp: '[\s]*MaxSessions"
+    values: "MaxSessions 2\n"
 
 - name: Banner creation
   ssh_conf:
     regexp: '[\s]*Banner'
     values: "Banner /etc/banner\n"
+
+- name: "Disable Keepalive"
+  ssh_conf:
+    regexp: '[\s]*TCPKeepAlive'
+    values: "TCPKeepAlive no\n"
 
 - name: "Enable the Ipv6"
   lineinfile:
@@ -139,6 +149,11 @@
   ssh_conf:
     regexp: '[\s]*ClientAliveCountMax'
     values: "ClientAliveCountMax 0\n"
+
+- name: "Limit logins to members of {{ users['admin_user_name'] }} group"
+  ssh_conf:
+    regexp: '[\s]*AllowGroups'
+    values: "AllowGroups {{ users['admin_user_name'] }}\n"
 
 - name: "Disable SSH Support for User Known Hosts"
   ssh_conf:
