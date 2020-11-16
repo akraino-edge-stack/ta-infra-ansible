@@ -66,6 +66,18 @@
     regexp: '^PASS_MIN_DAYS[\s]*[0-9]*$'
     line: 'PASS_MIN_DAYS   0'
 
+- name: "Set password hash to SHA512"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^ENCRYPT_METHOD[\s]*[a-z0-9]*$'
+    line: 'ENCRYPT_METHOD   SHA512'
+
+- name: "Set minimum number of password hash rounds"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^SHA_CRYPT_MIN_ROUNDS[\s]*[0-9]*$'
+    line: 'SHA_CRYPT_MIN_ROUNDS   5000'
+
 #
 # Linux Failed password attempts
 #
@@ -299,6 +311,7 @@
     - { name: 'kernel.core_uses_pid', value: 1 }
     - { name: 'kernel.randomize_va_space', value: 2 }
     - { name: 'kernel.core_pattern', value: '/var/core/core'}
+    - { name: 'kernel.kptr_restrict', value: 2 }
 
 #
 # Configure core dump
@@ -442,6 +455,75 @@
     state: absent
 
 #
+# tighten USB permissions
+# 
+- name: Set USBGuard RestoreControllerDeviceState to false
+  lineinfile:
+    path: /etc/usbguard/usbguard-daemon.conf
+    regexp: '^[#\s]*RestoreControllerDeviceState\s*=\s*[a-z\-]*\s*$'
+    line: 'RestoreControllerDeviceState=false'
+
+- name: Set USBGuard ImplicitPolicyTarget to block
+  lineinfile:
+    path: /etc/usbguard/usbguard-daemon.conf
+    regexp: '^[#\s]*ImplicitPolicyTarget\s*=\s*[a-z\-]*\s*$'
+    line: 'ImplicitPolicyTarget=block'
+
+- name: Apply USBGuard policy in all cases
+  lineinfile:
+    path: /etc/usbguard/usbguard-daemon.conf
+    regexp: "^[#\\s]*{{ item }}\\s*=\\s*[a-z\\-]*\\s*$"
+    line: "{{ item }}=apply-policy"
+  with_items:
+    - PresentControllerPolicy
+    - PresentDevicePolicy
+    - InsertedDevicePolicy
+
+- name: Limit USBGuard IPC to root
+  lineinfile:
+    path: /etc/usbguard/usbguard-daemon.conf
+    regexp: "^[#\\s]*IPCAllowed{{item}}\\s*="
+    line: "IPCAllowed{{item}}=root"
+  with_items:
+    - Users
+    - Groups
+
+- Name: Ban suspect USB devices
+  blockinfile:
+    # this isn't the optimal way to do this, i know, but i don't 
+    # want to create a whole new template tree just to add this.
+    path:  /etc/usbguard/rules.conf
+    create: yes
+    owner: root
+    group: root
+    mode: 0700
+    insertbefore: BOF
+    # rules.conf doesn't seem to allow comments
+    marker: ''
+    block: |
+     # the akraino REC is targeted at server installs; as such
+     # we're liberal about allowing standard devices on the
+     # assumption we will be deployed in a relatively secure
+     # environment.  The values below were chosen based on the
+     # devices that appear on a nokia OE19 with the virtual console
+     # enabled:
+     # xHCI controller/hub
+     allow with-interface equals { 09:00:00 }
+     # mass media — sites may want to consider restricting 
+     # this to 08:06:50 to just get the virtual CDROM and ban
+     # other USB media 
+     allow with-interface equals { 08:*:* }
+     # ethernet
+     allow with-interface equals { 02:02:ff }
+     # keyboard/mouse
+     allow with-interface one-of { 03:00:01 03:01:01 }
+     # per usbguard-rules.conf manpage: ban keyboard devices
+     # that expose other, suspicious, interfaces
+     reject with-interface all-of { 08:*:* 03:00:* }
+     reject with-interface all-of { 08:*:* 03:01:* }
+     reject with-interface all-of { 08:*:* e0:*:* }
+     reject with-interface all-of { 08:*:* 02:*:* }
+
 # Setting file permissions
 #
 
