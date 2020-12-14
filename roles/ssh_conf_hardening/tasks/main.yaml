@@ -111,7 +111,7 @@
 
 - name: "Limit interactive session count to 2"
   ssh_conf:
-    regexp: '[\s]*MaxSessions"
+    regexp: '[\s]*MaxSessions'
     values: "MaxSessions 2\n"
 
 - name: Banner creation
