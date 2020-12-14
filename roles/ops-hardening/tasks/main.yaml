@@ -456,7 +456,7 @@
 
 #
 # tighten USB permissions
-# 
+#
 - name: Set USBGuard RestoreControllerDeviceState to false
   lineinfile:
     path: /etc/usbguard/usbguard-daemon.conf
@@ -490,9 +490,9 @@
 
 - Name: Ban suspect USB devices
   blockinfile:
-    # this isn't the optimal way to do this, i know, but i don't 
+    # this isn't the optimal way to do this, i know, but i don't
     # want to create a whole new template tree just to add this.
-    path:  /etc/usbguard/rules.conf
+    path: /etc/usbguard/rules.conf
     create: yes
     owner: root
     group: root
@@ -509,9 +509,9 @@
      # enabled:
      # xHCI controller/hub
      allow with-interface equals { 09:00:00 }
-     # mass media — sites may want to consider restricting 
+     # mass media — sites may want to consider restricting
      # this to 08:06:50 to just get the virtual CDROM and ban
-     # other USB media 
+     # other USB media
      allow with-interface equals { 08:*:* }
      # ethernet
      allow with-interface equals { 02:02:ff }
