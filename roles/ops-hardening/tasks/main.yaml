@@ -492,7 +492,7 @@
   blockinfile:
     # this isn't the optimal way to do this, i know, but i don't 
     # want to create a whole new template tree just to add this.
-    path:  /etc/usbguard/rules.conf
+    path: /etc/usbguard/rules.conf
     create: yes
     owner: root
     group: root
