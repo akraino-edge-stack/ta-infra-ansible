@@ -330,6 +330,13 @@
     line: 'Storage=none'
 
 #
+# Confingure kernel dump
+- name: "Disable kernel dump service"
+  shell: systemctl stop kdump.service
+
+- name: "Disable kernel dump service"
+  shell: systemctl disable kdump.service
+
 # Configure syslog
 #
 - name: "Stop rsyslog Service"

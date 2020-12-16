@@ -101,7 +101,6 @@ ln -sf %{_playbooks_path}/disable-old-node-rsyslog.yml                %{buildroo
 ln -sf %{_playbooks_path}/enablecmagent.yml                           %{buildroot}/%{_postconfig_path}
 ln -sf %{_playbooks_path}/haproxy-install.yml                         %{buildroot}/%{_postconfig_path}
 ln -sf %{_playbooks_path}/ipv6-config.yml                             %{buildroot}/%{_postconfig_path}
-ln -sf %{_playbooks_path}/kernel-core-handling.yml                    %{buildroot}/%{_postconfig_path}
 ln -sf %{_playbooks_path}/motd.yml                                    %{buildroot}/%{_postconfig_path}
 ln -sf %{_playbooks_path}/hostcli.yml                                 %{buildroot}/%{_postconfig_path}
 ln -sf %{_playbooks_path}/oom.yml                                     %{buildroot}/%{_postconfig_path}
