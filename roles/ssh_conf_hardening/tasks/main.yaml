@@ -150,10 +150,10 @@
     regexp: '[\s]*ClientAliveCountMax'
     values: "ClientAliveCountMax 0\n"
 
-- name: "Limit logins to members of {{ users['admin_user_name'] }} group"
+- name: "Limit logins to members of admin, keystone, and ironic groups"
   ssh_conf:
     regexp: '[\s]*AllowGroups'
-    values: "AllowGroups {{ users['admin_user_name'] }}\n"
+    values: "AllowGroups {{ users['admin_user_name'] }} {{ keystone_system_group_name |default('keystone') }} {{ ironic_system_group_name | default('ironic') }}\n"
 
 - name: "Disable SSH Support for User Known Hosts"
   ssh_conf:
