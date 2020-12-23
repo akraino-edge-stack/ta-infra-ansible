@@ -54,6 +54,9 @@ if [ ! -d $evac_dir ];then
   mkdir -p "$evac_dir"
 fi
 
+# mirror the permissions of the existing directory
+oPerm=`stat -c '%a' ${evac_dir}`
+'
 if [ ! -b $mount_vol_dev ];then
   echo "Provided volume $mount_vol_dev is not a block device!!"
   exit 1
@@ -115,6 +118,7 @@ rm -rf ${evac_dir}/*
 mount $evac_dir
 
 chown ${owner}:${group} ${evac_dir}
+chmod ${oPerm} ${evac_dir}
 
 cp -rpf $tmp_dir/* ${evac_dir}/
 rm -rf $tmp_dir

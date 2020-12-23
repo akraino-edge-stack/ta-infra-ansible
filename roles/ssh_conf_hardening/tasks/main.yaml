@@ -130,6 +130,11 @@
     insertafter: '^[\s]*ListenAddress 0.0.0.0'
     line: 'ListenAddress ::'
 
+- name: Enable verbose logging for SSH daemon
+  ssh_conf:
+    regexp: '[\s]*LogLevel"
+    values: "LogLevel VERBOSE"
+
 - name: "Disable Kerberos Authentication"
   ssh_conf:
     regexp: '[\s]*KerberosAuthentication'
