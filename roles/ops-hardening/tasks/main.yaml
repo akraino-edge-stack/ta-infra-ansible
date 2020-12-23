@@ -78,6 +78,12 @@
     regexp: '^SHA_CRYPT_MIN_ROUNDS[\s]*[0-9]*$'
     line: 'SHA_CRYPT_MIN_ROUNDS   5000'
 
+- name: "Set maximum number of password hash rounds"
+  lineinfile:
+    path: /etc/login.defs
+    regexp: '^SHA_CRYPT_MAX_ROUNDS[\s]*[0-9]*$'
+    line: 'SHA_CRYPT_MAX_ROUNDS   10000'
+
 #
 # Linux Failed password attempts
 #
@@ -312,6 +318,8 @@
     - { name: 'kernel.randomize_va_space', value: 2 }
     - { name: 'kernel.core_pattern', value: '/var/core/core'}
     - { name: 'kernel.kptr_restrict', value: 2 }
+    - { name: 'kernel.sysrq', value: 0 }
+    - { name: 'kernel.yama.ptrace_scope', value: 3 }
 
 #
 # Configure core dump
