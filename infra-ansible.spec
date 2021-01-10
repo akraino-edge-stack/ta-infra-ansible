@@ -15,7 +15,7 @@
 
 Name:           infra-ansible
 Version:        %{_version}
-Release:        10%{?dist}
+Release:        11%{?dist}
 Summary:        Contains ansible playbook and roles for Akraino rec blueprint
 License:        %{_platform_licence}
 Source0:        %{name}-%{version}.tar.gz
