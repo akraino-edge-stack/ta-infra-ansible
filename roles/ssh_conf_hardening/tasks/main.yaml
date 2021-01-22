@@ -132,7 +132,7 @@
 
 - name: Enable verbose logging for SSH daemon
   ssh_conf:
-    regexp: '[\s]*LogLevel"
+    regexp: '[\s]*LogLevel'
     values: "LogLevel VERBOSE"
 
 - name: "Disable Kerberos Authentication"
