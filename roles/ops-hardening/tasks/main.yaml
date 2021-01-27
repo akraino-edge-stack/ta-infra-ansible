@@ -76,7 +76,7 @@
   lineinfile:
     path: /etc/login.defs
     regexp: '^SHA_CRYPT_MIN_ROUNDS[\s]*[0-9]*$'
-    line: 'SHA_CRYPT_MIN_ROUNDS   5000'
+    line: 'SHA_CRYPT_MIN_ROUNDS   10000'
 
 - name: "Set maximum number of password hash rounds"
   lineinfile:
@@ -230,6 +230,14 @@
   when:
     - item.stat.exists == true
 
+- name: Limit access to the assembler binary
+  file:
+    path: "/usr/bin/as"
+    state: file
+    mode: "0700"
+    owner: root
+    group: root
+
 #
 # Disable direct root login
 #
@@ -273,8 +281,7 @@
     state: absent
     regexp: '^tcp6.*'
 
-- name: Disable automatic ipv6 configuration
-  when: ansible_default_ipv6|length > 0
+- name: Disable automatic ipv6 configuration and routing
   sysctl:
     name: "{{ item.name }}"
     value: "{{ item.value }}"
@@ -282,12 +289,13 @@
     reload: yes
   with_items:
     - { name: 'net.ipv6.conf.all.accept_source_route', value: 0 }
+    - { name: 'net.ipv6.conf.default.accept_source_route', value: 0 }
     - { name: 'net.ipv6.conf.all.accept_ra', value: 0 }
     - { name: 'net.ipv6.conf.default.accept_ra', value: 0 }
     - { name: 'net.ipv6.conf.all.accept_redirects', value: 0 }
     - { name: 'net.ipv6.conf.default.accept_redirects', value: 0 }
-    - { name: 'net.ipv6.conf.default.accept_source_route', value: 0 }
     - { name: 'net.ipv6.conf.all.forwarding', value: 0 }
+    - { name: 'net.ipv6.conf.default.forwarding', value: 0 }
 
 #
 # Configure kernel parameters
